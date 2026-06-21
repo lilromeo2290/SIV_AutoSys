@@ -9,7 +9,6 @@ export type ModulePage =
   | 'billing'
   | 'reminders'
   | 'reports'
-  | 'user-management'
 
 export type UserRole = 
   | 'ADMIN'
@@ -30,7 +29,7 @@ export interface UserProfile {
 // ==================== Permissions Matrix ====================
 // Which modules each role can ACCESS (see in sidebar)
 const MODULE_ACCESS: Record<UserRole, ModulePage[]> = {
-  ADMIN: ['dashboard', 'customers', 'job-cards', 'workshop', 'inventory', 'billing', 'reminders', 'reports', 'user-management'],
+  ADMIN: ['dashboard', 'customers', 'job-cards', 'workshop', 'inventory', 'billing', 'reminders', 'reports'],
   MANAGER: ['dashboard', 'customers', 'job-cards', 'workshop', 'billing', 'reminders', 'reports'],
   SERVICE_ADVISOR: ['dashboard', 'customers', 'job-cards', 'workshop', 'billing'],
   CASHIER: ['dashboard', 'customers', 'billing'],
@@ -40,7 +39,7 @@ const MODULE_ACCESS: Record<UserRole, ModulePage[]> = {
 
 // Which modules each role can CREATE in (show add/create buttons)
 const MODULE_CREATE: Record<UserRole, ModulePage[]> = {
-  ADMIN: ['customers', 'job-cards', 'inventory', 'billing', 'reminders', 'user-management'],
+  ADMIN: ['customers', 'job-cards', 'inventory', 'billing', 'reminders'],
   MANAGER: ['customers', 'job-cards', 'billing', 'reminders'],
   SERVICE_ADVISOR: ['customers', 'job-cards'],
   CASHIER: ['billing'],
@@ -50,7 +49,7 @@ const MODULE_CREATE: Record<UserRole, ModulePage[]> = {
 
 // Which modules each role can EDIT in (show edit/delete buttons)
 const MODULE_EDIT: Record<UserRole, ModulePage[]> = {
-  ADMIN: ['customers', 'job-cards', 'inventory', 'billing', 'reminders', 'user-management'],
+  ADMIN: ['customers', 'job-cards', 'inventory', 'billing', 'reminders'],
   MANAGER: ['customers', 'job-cards', 'billing', 'reminders'],
   SERVICE_ADVISOR: ['customers', 'job-cards'],
   CASHIER: ['billing'],

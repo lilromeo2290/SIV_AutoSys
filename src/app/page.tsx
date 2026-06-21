@@ -24,7 +24,6 @@ import {
   Receipt,
   Bell,
   BarChart3,
-  UserCog,
   Moon,
   Sun,
   LogOut,
@@ -41,7 +40,6 @@ import { InventoryPage } from '@/components/modules/inventory-page'
 import { BillingPage } from '@/components/modules/billing-page'
 import { RemindersPage } from '@/components/modules/reminders-page'
 import { ReportsPage } from '@/components/modules/reports-page'
-import { UserManagementPage } from '@/components/modules/user-management-page'
 
 const allNavItems: { id: ModulePage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,7 +50,6 @@ const allNavItems: { id: ModulePage; label: string; icon: React.ElementType }[] 
   { id: 'billing', label: 'Billing', icon: Receipt },
   { id: 'reminders', label: 'Reminders', icon: Bell },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'user-management', label: 'User Management', icon: UserCog },
 ]
 
 function getInitials(name: string): string {
@@ -88,7 +85,6 @@ function PageRenderer() {
     case 'billing': return <BillingPage />
     case 'reminders': return <RemindersPage />
     case 'reports': return <ReportsPage />
-    case 'user-management': return <UserManagementPage />
     default: return <DashboardPage />
   }
 }
