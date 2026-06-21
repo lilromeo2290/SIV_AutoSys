@@ -21,7 +21,10 @@ import {
   DollarSign,
   AlertTriangle,
   FileWarning,
+  Shield,
+  UserCheck,
 } from 'lucide-react';
+import { useAppStore, ROLE_LABELS, ROLE_COLORS, ROLE_ICONS, type UserRole } from '@/store/app-store';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -82,6 +85,16 @@ interface RecentJob {
   customer: { name: string };
   vehicle: { make: string; model: string; plateNumber: string };
   technician: { name: string };
+}
+
+interface StaffMember {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  active: boolean;
+  assignedJobs?: { status: string }[];
 }
 
 interface DashboardData {
@@ -382,12 +395,207 @@ function RecentJobsTable({ jobs }: { jobs: RecentJob[] }) {
   );
 }
 
+const MODULE_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard',
+  customers: 'Customers',
+  'job-cards': 'Job Cards',
+  workshop: 'Workshop',
+  inventory: 'Inventory',
+  billing: 'Billing',
+  reminders: 'Reminders',
+  reports: 'Reports',
+};
+
+const ROLE_MODULE_ACCESS: Record<string, string[]> = {
+  ADMIN: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Inventory', 'Billing', 'Reminders', 'Reports'],
+  MANAGER: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing', 'Reminders', 'Reports'],
+  SERVICE_ADVISOR: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing'],
+  CASHIER: ['Dashboard', 'Customers', 'Billing'],
+  STOREKEEPER: ['Dashboard', 'Workshop', 'Inventory'],
+  TECHNICIAN: ['Dashboard', 'Workshop', 'Job Cards'],
+};
+
+const ROLE_MODULE_CREATE: Record<string, string[]> = {
+  ADMIN: ['Customers', 'Job Cards', 'Inventory', 'Billing', 'Reminders'],
+  MANAGER: ['Customers', 'Job Cards', 'Billing', 'Reminders'],
+  SERVICE_ADVISOR: ['Customers', 'Job Cards'],
+  CASHIER: ['Billing'],
+  STOREKEEPER: ['Inventory'],
+  TECHNICIAN: [],
+};
+
+const ROLE_MODULE_APPROVE: Record<string, string[]> = {
+  ADMIN: ['Job Cards', 'Billing'],
+  MANAGER: ['Job Cards', 'Billing'],
+  SERVICE_ADVISOR: [],
+  CASHIER: [],
+  STOREKEEPER: [],
+  TECHNICIAN: [],
+};
+
+function getInitials(name: string): string {
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function UserRolesSection({ staff }: { staff: StaffMember[] }) {
+  const currentUser = useAppStore((s) => s.currentUser);
+
+  const roles: UserRole[] = ['ADMIN', 'MANAGER', 'SERVICE_ADVISOR', 'CASHIER', 'STOREKEEPER', 'TECHNICIAN'];
+
+  const staffByRole = roles.map((role) => {
+    const members = staff.filter((s) => s.role === role);
+    const activeCount = members.filter((s) => s.active).length;
+    const activeJobsCount = members.reduce((sum, m) => {
+      const assigned = m.assignedJobs || [];
+      return sum + assigned.filter((j) => ['PENDING', 'IN_PROGRESS', 'WAITING_PARTS'].includes(j.status)).length;
+    }, 0);
+    return { role, members, activeCount, activeJobsCount };
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          User Roles & Permissions
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {staffByRole.map(({ role, members, activeCount, activeJobsCount }) => {
+            const isCurrentRole = currentUser?.role === role;
+            return (
+              <div
+                key={role}
+                className={`rounded-lg border p-4 transition-all ${
+                  isCurrentRole
+                    ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                    : 'bg-muted/30 hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl" role="img" aria-label={ROLE_LABELS[role]}>
+                      {ROLE_ICONS[role]}
+                    </span>
+                    <div>
+                      <h4 className="font-semibold text-sm leading-none">{ROLE_LABELS[role]}</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                        {role.replace(/_/g, ' ').toLowerCase()}
+                      </p>
+                    </div>
+                  </div>
+                  {isCurrentRole && (
+                    <Badge className="text-[10px] px-1.5 py-0">
+                      <UserCheck className="h-3 w-3 mr-1" />
+                      You
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Staff avatars */}
+                <div className="flex items-center gap-1 mb-3">
+                  {members.slice(0, 4).map((m) => (
+                    <div
+                      key={m.id}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold ring-2 ring-background ${
+                        m.active
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                      title={`${m.name} (${m.active ? 'Active' : 'Inactive'})`}
+                    >
+                      {getInitials(m.name)}
+                    </div>
+                  ))}
+                  {members.length > 4 && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      +{members.length - 4}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {activeCount}/{members.length} active
+                  </span>
+                </div>
+
+                {/* Module access tags */}
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      Access
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {(ROLE_MODULE_ACCESS[role] || []).map((mod) => (
+                        <span
+                          key={mod}
+                          className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-background border"
+                        >
+                          {mod}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {(ROLE_MODULE_CREATE[role] || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                        Can Create
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {(ROLE_MODULE_CREATE[role] || []).map((mod) => (
+                          <span
+                            key={mod}
+                            className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                          >
+                            {mod}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(ROLE_MODULE_APPROVE[role] || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                        Can Approve
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {(ROLE_MODULE_APPROVE[role] || []).map((mod) => (
+                          <span
+                            key={mod}
+                            className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                          >
+                            {mod}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Active jobs indicator */}
+                {activeJobsCount > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <p className="text-[10px] text-muted-foreground">
+                      <Wrench className="h-3 w-3 inline mr-1" />
+                      {activeJobsCount} active job{activeJobsCount !== 1 ? 's' : ''} assigned
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -396,11 +604,17 @@ export function DashboardPage() {
 
     async function fetchDashboard() {
       try {
-        const res = await fetch('/api/dashboard');
-        if (!res.ok) throw new Error(`Failed to fetch dashboard data (${res.status})`);
-        const json: DashboardData = await res.json();
+        const [dashRes, staffRes] = await Promise.all([
+          fetch('/api/dashboard'),
+          fetch('/api/staff'),
+        ]);
+        if (!dashRes.ok) throw new Error(`Failed to fetch dashboard data (${dashRes.status})`);
+        if (!staffRes.ok) throw new Error(`Failed to fetch staff data (${staffRes.status})`);
+        const dashJson: DashboardData = await dashRes.json();
+        const staffJson: StaffMember[] = await staffRes.json();
         if (!cancelled) {
-          setData(json);
+          setData(dashJson);
+          setStaff(staffJson);
           setLoading(false);
         }
       } catch (err) {
@@ -438,6 +652,7 @@ export function DashboardPage() {
           <ChartSkeleton />
           <ChartSkeleton />
         </div>
+        <TableSkeleton />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TableSkeleton />
           <TableSkeleton />
@@ -456,6 +671,9 @@ export function DashboardPage() {
         <RevenueChart paidInvoices={data.paidInvoices} />
         <JobsByStatusChart stats={data.stats} />
       </div>
+
+      {/* User Roles Section */}
+      <UserRolesSection staff={staff} />
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
