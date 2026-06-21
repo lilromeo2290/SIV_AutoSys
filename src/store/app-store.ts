@@ -9,6 +9,7 @@ export type ModulePage =
   | 'billing'
   | 'reminders'
   | 'reports'
+  | 'user-roles'
 
 export type UserRole = 
   | 'ADMIN'
@@ -29,8 +30,8 @@ export interface UserProfile {
 // ==================== Permissions Matrix ====================
 // Which modules each role can ACCESS (see in sidebar)
 const MODULE_ACCESS: Record<UserRole, ModulePage[]> = {
-  ADMIN: ['dashboard', 'customers', 'job-cards', 'workshop', 'inventory', 'billing', 'reminders', 'reports'],
-  MANAGER: ['dashboard', 'customers', 'job-cards', 'workshop', 'billing', 'reminders', 'reports'],
+  ADMIN: ['dashboard', 'customers', 'job-cards', 'workshop', 'inventory', 'billing', 'reminders', 'reports', 'user-roles'],
+  MANAGER: ['dashboard', 'customers', 'job-cards', 'workshop', 'billing', 'reminders', 'reports', 'user-roles'],
   SERVICE_ADVISOR: ['dashboard', 'customers', 'job-cards', 'workshop', 'billing'],
   CASHIER: ['dashboard', 'customers', 'billing'],
   STOREKEEPER: ['dashboard', 'inventory', 'workshop'],

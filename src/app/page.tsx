@@ -29,6 +29,7 @@ import {
   LogOut,
   Shield,
   ChevronRight,
+  UserCog,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { LoginScreen } from '@/components/layout/login-screen'
@@ -40,6 +41,7 @@ import { InventoryPage } from '@/components/modules/inventory-page'
 import { BillingPage } from '@/components/modules/billing-page'
 import { RemindersPage } from '@/components/modules/reminders-page'
 import { ReportsPage } from '@/components/modules/reports-page'
+import { UserRolesPage } from '@/components/modules/user-roles-page'
 
 const allNavItems: { id: ModulePage; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -50,6 +52,7 @@ const allNavItems: { id: ModulePage; label: string; icon: React.ElementType }[] 
   { id: 'billing', label: 'Billing', icon: Receipt },
   { id: 'reminders', label: 'Reminders', icon: Bell },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
+  { id: 'user-roles', label: 'User Roles & Staff', icon: UserCog },
 ]
 
 function getInitials(name: string): string {
@@ -85,6 +88,7 @@ function PageRenderer() {
     case 'billing': return <BillingPage />
     case 'reminders': return <RemindersPage />
     case 'reports': return <ReportsPage />
+    case 'user-roles': return <UserRolesPage />
     default: return <DashboardPage />
   }
 }
@@ -176,8 +180,8 @@ function AppShell() {
             <SidebarTrigger />
             <Separator orientation="vertical" className="h-6" />
             <div className="flex-1">
-              <h2 className="text-lg font-semibold capitalize">
-                {activePage.replace('-', ' ')}
+              <h2 className="text-lg font-semibold">
+                {activePage === 'user-roles' ? 'User Roles & Staff' : activePage.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
               </h2>
             </div>
             <div className="flex items-center gap-2">

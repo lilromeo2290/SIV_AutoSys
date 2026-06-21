@@ -1,0 +1,569 @@
+   420→   420→  );
+   421→   421→}
+   422→   422→
+   423→   423→// ---------------------------------------------------------------------------
+   424→   424→// Permission Preview (used in dialogs)
+   425→   425→// ---------------------------------------------------------------------------
+   426→   426→
+   427→   427→function PermissionPreview({ role }: { role: UserRole }) {
+   428→   428→  return (
+   429→   429→    <div className="space-y-3 mt-3">
+   430→   430→      <div>
+   431→   431→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-green-500" /> Module Access</h4>
+   432→   432→        <div className="flex flex-wrap gap-1">{(MODULE_ACCESS[role] || []).map((mod) => <Badge key={mod} variant="outline" className="text-[10px] px-1.5 py-0">{mod}</Badge>)}</div>
+   433→   433→      </div>
+   434→   434→      <div>
+   435→   435→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><UserPlus className="h-3.5 w-3.5 text-blue-500" /> Can Create</h4>
+   436→   436→        <div className="flex flex-wrap gap-1">
+   437→   437→          {MODULE_CREATE[role]?.length > 0 ? MODULE_CREATE[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   438→   438→        </div>
+   439→   439→      </div>
+   440→   440→      <div>
+   441→   441→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><Edit className="h-3.5 w-3.5 text-amber-500" /> Can Edit</h4>
+   442→   442→        <div className="flex flex-wrap gap-1">
+   443→   443→          {MODULE_EDIT[role]?.length > 0 ? MODULE_EDIT[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   444→   444→        </div>
+   445→   445→      </div>
+   446→   446→      <div>
+   447→   447→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><Key className="h-3.5 w-3.5 text-purple-500" /> Can Approve</h4>
+   448→   448→        <div className="flex flex-wrap gap-1">
+   449→   449→          {MODULE_APPROVE[role]?.length > 0 ? MODULE_APPROVE[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   450→   450→        </div>
+   451→   451→      </div>
+   452→   452→    </div>
+   453→   453→  );
+   454→   454→}
+   455→   455→
+   456→   456→// ---------------------------------------------------------------------------
+   457→   457→// User Roles Section (with inline user management for Admin)
+   458→   458→// ---------------------------------------------------------------------------
+   459→   459→
+   460→   460→const ALL_ROLES: UserRole[] = ['ADMIN', 'MANAGER', 'SERVICE_ADVISOR', 'CASHIER', 'STOREKEEPER', 'TECHNICIAN'];
+   461→   461→
+   462→   462→function UserRolesSection({
+   463→   463→  staff,
+   464→   464→  onRefreshStaff,
+   465→   465→}: {
+   466→   466→  staff: StaffMember[];
+   467→   467→  onRefreshStaff: () => void;
+   468→   468→}) {
+   469→   469→  const currentUser = useAppStore((s) => s.currentUser);
+   470→   470→  const isAdmin = currentUser?.role === 'ADMIN';
+   471→   471→
+   472→   472→  const [expanded, setExpanded] = useState(true);
+   473→   473→  const [search, setSearch] = useState('');
+   474→   474→  const [roleFilter, setRoleFilter] = useState<string>('all');
+   475→   475→
+   476→   476→  // Dialog states
+   477→   477→  const [createOpen, setCreateOpen] = useState(false);
+   478→   478→  const [editOpen, setEditOpen] = useState(false);
+   479→   479→  const [deleteOpen, setDeleteOpen] = useState(false);
+   480→   480→
+   481→   481→  // Selected staff
+   482→   482→  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+   483→   483→
+   484→   484→  // Form states
+   485→   485→  const [formName, setFormName] = useState('');
+   486→   486→  const [formEmail, setFormEmail] = useState('');
+   487→   487→  const [formPhone, setFormPhone] = useState('');
+   488→   488→  const [formRole, setFormRole] = useState<UserRole>('TECHNICIAN');
+   489→   489→  const [formActive, setFormActive] = useState(true);
+   490→   490→  const [submitting, setSubmitting] = useState(false);
+   491→   491→  const [deleting, setDeleting] = useState(false);
+   492→   492→
+   493→   493→  // Filtered staff
+   494→   494→  const filteredStaff = staff.filter((s) => {
+   495→   495→    const matchSearch = search === '' || s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase()) || s.phone.includes(search);
+   496→   496→    const matchRole = roleFilter === 'all' || s.role === roleFilter;
+   497→   497→    return matchSearch && matchRole;
+   498→   498→  });
+   499→   499→
+   500→   500→  // Staff by role for role cards
+   501→   501→  const staffByRole = ALL_ROLES.map((role) => {
+   502→   502→    const members = staff.filter((s) => s.role === role);
+   503→   503→    const activeCount = members.filter((s) => s.active).length;
+   504→   504→    return { role, members, activeCount };
+   505→   505→  });
+   506→   506→
+   507→   507→  const resetForm = () => {
+   508→   508→    setFormName('');
+   509→   509→    setFormEmail('');
+   510→   510→    setFormPhone('');
+   511→   511→    setFormRole('TECHNICIAN');
+   512→   512→    setFormActive(true);
+   513→   513→  };
+   514→   514→
+   515→   515→  // ---- Create Handler ----
+   516→   516→  const handleCreate = async () => {
+   517→   517→    if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
+   518→   518→      toast.error('Please fill in all required fields');
+   519→   519→      return;
+   520→   520→    }
+   521→   521→    setSubmitting(true);
+   522→   522→    try {
+   523→   523→      const res = await fetch('/api/staff', {
+   524→   524→        method: 'POST',
+   525→   525→        headers: { 'Content-Type': 'application/json' },
+   526→   526→        body: JSON.stringify({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim(), role: formRole, active: formActive }),
+   527→   527→      });
+   528→   528→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   529→   529→      toast.success(`${formName.trim()} created successfully`);
+   530→   530→      setCreateOpen(false);
+   531→   531→      resetForm();
+   532→   532→      onRefreshStaff();
+   533→   533→    } catch (err) {
+   534→   534→      toast.error(err instanceof Error ? err.message : 'Failed to create');
+   535→   535→    } finally { setSubmitting(false); }
+   536→   536→  };
+   537→   537→
+   538→   538→  // ---- Edit Handler ----
+   539→   539→  const handleEdit = async () => {
+   540→   540→    if (!selectedStaff || !formName.trim() || !formEmail.trim() || !formPhone.trim()) {
+   541→   541→      toast.error('Please fill in all required fields');
+   542→   542→      return;
+   543→   543→    }
+   544→   544→    setSubmitting(true);
+   545→   545→    try {
+   546→   546→      const res = await fetch(`/api/staff/${selectedStaff.id}`, {
+   547→   547→        method: 'PUT',
+   548→   548→        headers: { 'Content-Type': 'application/json' },
+   549→   549→        body: JSON.stringify({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim(), role: formRole, active: formActive }),
+   550→   550→      });
+   551→   551→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   552→   552→      toast.success(`${formName.trim()} updated successfully`);
+   553→   553→      setEditOpen(false);
+   554→   554→      setSelectedStaff(null);
+   555→   555→      resetForm();
+   556→   556→      onRefreshStaff();
+   557→   557→    } catch (err) {
+   558→   558→      toast.error(err instanceof Error ? err.message : 'Failed to update');
+   559→   559→    } finally { setSubmitting(false); }
+   560→   560→  };
+   561→   561→
+   562→   562→  // ---- Delete Handler ----
+   563→   563→  const handleDelete = async () => {
+   564→   564→    if (!selectedStaff) return;
+   565→   565→    setDeleting(true);
+   566→   566→    try {
+   567→   567→      const res = await fetch(`/api/staff/${selectedStaff.id}`, { method: 'DELETE' });
+   568→   568→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   569→   569→      toast.success(`${selectedStaff.name} deleted`);
+   570→   570→      setDeleteOpen(false);
+   571→   571→      setSelectedStaff(null);
+   572→   572→      onRefreshStaff();
+   573→   573→    } catch (err) {
+   574→   574→      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+   575→   575→    } finally { setDeleting(false); }
+   576→   576→  };
+   577→   577→
+   578→   578→  // ---- Toggle Active Handler ----
+   579→   579→  const handleToggleActive = async (member: StaffMember) => {
+   580→   580→    try {
+   581→   581→      const res = await fetch(`/api/staff/${member.id}`, {
+   582→   582→        method: 'PUT',
+   583→   583→        headers: { 'Content-Type': 'application/json' },
+   584→   584→        body: JSON.stringify({ active: !member.active }),
+   585→   585→      });
+   586→   586→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   587→   587→      toast.success(`${member.name} ${!member.active ? 'activated' : 'deactivated'}`);
+   588→   588→      onRefreshStaff();
+   589→   589→    } catch (err) {
+   590→   590→      toast.error(err instanceof Error ? err.message : 'Failed');
+   591→   591→    }
+   592→   592→  };
+   593→   593→
+   594→   594→  const openEditDialog = (member: StaffMember) => {
+   595→   595→    setSelectedStaff(member);
+   596→   596→    setFormName(member.name);
+   597→   597→    setFormEmail(member.email);
+   598→   598→    setFormPhone(member.phone);
+   599→   599→    setFormRole(member.role as UserRole);
+   600→   600→    setFormActive(member.active);
+   601→   601→    setEditOpen(true);
+   602→   602→  };
+   603→   603→
+   604→   604→  const openDeleteDialog = (member: StaffMember) => {
+   605→   605→    setSelectedStaff(member);
+   606→   606→    setDeleteOpen(true);
+   607→   607→  };
+   608→   608→
+   609→   609→  const hasActiveJobs = (member: StaffMember) =>
+   610→   610→    (member.assignedJobs || []).some((j) => ['PENDING', 'IN_PROGRESS', 'WAITING_PARTS'].includes(j.status));
+   611→   611→
+   612→   612→  return (
+   613→   613→    <>
+   614→   614→      <Card>
+   615→   615→        <CardHeader>
+   616→   616→          <div className="flex items-center justify-between">
+   617→   617→            <CardTitle className="flex items-center gap-2">
+   618→   618→              <Shield className="h-5 w-5" />
+   619→   619→              User Roles & Staff
+   620→   620→            </CardTitle>
+   621→   621→            <div className="flex items-center gap-2">
+   622→   622→              {isAdmin && (
+   623→   623→                <Button size="sm" className="text-xs h-8" onClick={() => { resetForm(); setCreateOpen(true); }}>
+   624→   624→                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+   625→   625→                  Add Staff
+   626→   626→                </Button>
+   627→   627→              )}
+   628→   628→              <Button variant="ghost" size="sm" className="text-xs h-8 px-2" onClick={() => setExpanded(!expanded)}>
+   629→   629→                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+   630→   630→              </Button>
+   631→   631→            </div>
+   632→   632→          </div>
+   633→   633→          <CardDescription className="mt-1">
+   634→   634→            {staff.length} staff member{staff.length !== 1 ? 's' : ''} across {ALL_ROLES.length} roles
+   635→   635→          </CardDescription>
+   636→   636→        </CardHeader>
+   637→   637→
+   638→   638→        {expanded && (
+   639→   639→          <CardContent className="space-y-6">
+   640→   640→            {/* Role Cards Overview */}
+   641→   641→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   642→   642→              {staffByRole.map(({ role, members, activeCount }) => {
+   643→   643→                const isCurrentRole = currentUser?.role === role;
+   644→   644→                return (
+   645→   645→                  <div
+   646→   646→                    key={role}
+   647→   647→                    className={`rounded-lg border p-3 transition-all text-center cursor-default ${
+   648→   648→                      isCurrentRole ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20' : 'bg-muted/30 hover:bg-muted/50'
+   649→   649→                    }`}
+   650→   650→                  >
+   651→   651→                    <span className="text-2xl">{ROLE_ICONS[role]}</span>
+   652→   652→                    <h4 className="font-semibold text-xs mt-1.5 leading-none">{ROLE_LABELS[role]}</h4>
+   653→   653→                    <p className="text-[10px] text-muted-foreground mt-0.5">
+   654→   654→                      {activeCount}/{members.length} active
+   655→   655→                    </p>
+   656→   656→                    {isCurrentRole && (
+   657→   657→                      <Badge className="text-[9px] px-1 py-0 mt-1">
+   658→   658→                        <UserCheck className="h-2.5 w-2.5 mr-0.5" /> You
+   659→   659→                      </Badge>
+   660→   660→                    )}
+   661→   661→                  </div>
+   662→   662→                );
+   663→   663→              })}
+   664→   664→            </div>
+   665→   665→
+   666→   666→            {/* Staff Table (Admin sees full table; others see compact list) */}
+   667→   667→            {isAdmin ? (
+   668→   668→              <>
+   669→   669→                {/* Search and filter row */}
+   670→   670→                <div className="flex flex-col sm:flex-row gap-2">
+   671→   671→                  <div className="relative flex-1">
+   672→   672→                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   673→   673→                    <Input placeholder="Search by name, email, or phone..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+   674→   674→                  </div>
+   675→   675→                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+   676→   676→                    <SelectTrigger className="w-full sm:w-40 h-9">
+   677→   677→                      <SelectValue placeholder="All Roles" />
+   678→   678→                    </SelectTrigger>
+   679→   679→                    <SelectContent>
+   680→   680→                      <SelectItem value="all">All Roles</SelectItem>
+   681→   681→                      {ALL_ROLES.map((r) => (
+   682→   682→                        <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+   683→   683→                      ))}
+   684→   684→                    </SelectContent>
+   685→   685→                  </Select>
+   686→   686→                </div>
+   687→   687→
+   688→   688→                <Table>
+   689→   689→                  <TableHeader>
+   690→   690→                    <TableRow>
+   691→   691→                      <TableHead>Staff Member</TableHead>
+   692→   692→                      <TableHead className="hidden md:table-cell">Email</TableHead>
+   693→   693→                      <TableHead>Role</TableHead>
+   694→   694→                      <TableHead className="hidden sm:table-cell">Status</TableHead>
+   695→   695→                      <TableHead className="text-right">Actions</TableHead>
+   696→   696→                    </TableRow>
+   697→   697→                  </TableHeader>
+   698→   698→                  <TableBody>
+   699→   699→                    {filteredStaff.length === 0 ? (
+   700→   700→                      <TableRow><TableCell colSpan={5} className="h-20 text-center text-muted-foreground">No staff members found</TableCell></TableRow>
+   701→   701→                    ) : filteredStaff.map((member) => {
+   702→   702→                      const isSelf = currentUser?.id === member.id;
+   703→   703→                      return (
+   704→   704→                        <TableRow key={member.id} className={!member.active ? 'opacity-60' : ''}>
+   705→   705→                          <TableCell>
+   706→   706→                            <div className="flex items-center gap-2.5">
+   707→   707→                              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-semibold ring-2 ring-background ${member.active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+   708→   708→                                {getInitials(member.name)}
+   709→   709→                              </div>
+   710→   710→                              <div>
+   711→   711→                                <p className="font-medium text-sm leading-none">
+   712→   712→                                  {member.name}
+   713→   713→                                  {isSelf && <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0">You</Badge>}
+   714→   714→                                </p>
+   715→   715→                                <p className="text-xs text-muted-foreground mt-0.5 md:hidden truncate max-w-[160px]">{member.email}</p>
+   716→   716→                              </div>
+   717→   717→                            </div>
+   718→   718→                          </TableCell>
+   719→   719→                          <TableCell className="hidden md:table-cell text-sm">{member.email}</TableCell>
+   720→   720→                          <TableCell>
+   721→   721→                            <Badge className={`text-[10px] font-medium ${ROLE_COLORS[member.role as UserRole]}`}>
+   722→   722→                              <span className="mr-0.5">{ROLE_ICONS[member.role as UserRole]}</span>
+   723→   723→                              {ROLE_LABELS[member.role as UserRole]}
+   724→   724→                            </Badge>
+   725→   725→                          </TableCell>
+   726→   726→                          <TableCell className="hidden sm:table-cell">
+   727→   727→                            <div className="flex items-center gap-1.5">
+   728→   728→                              <div className={`h-2 w-2 rounded-full ${member.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+   729→   729→                              <span className="text-xs text-muted-foreground">{member.active ? 'Active' : 'Inactive'}</span>
+   730→   730→                            </div>
+   731→   731→                          </TableCell>
+   732→   732→                          <TableCell className="text-right">
+   733→   733→                            <DropdownMenu>
+   734→   734→                              <DropdownMenuTrigger asChild>
+   735→   735→                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+   736→   736→                              </DropdownMenuTrigger>
+   737→   737→                              <DropdownMenuContent align="end">
+   738→   738→                                <DropdownMenuItem onClick={() => openEditDialog(member)}>
+   739→   739→                                  <Edit className="h-4 w-4 mr-2" />Edit Role &amp; Info
+   740→   740→                                </DropdownMenuItem>
+   741→   741→                                <DropdownMenuItem onClick={() => handleToggleActive(member)}>
+   742→   742→                                  {member.active ? <><XCircle className="h-4 w-4 mr-2" />Deactivate</> : <><CheckCircle className="h-4 w-4 mr-2" />Activate</>}
+   743→   743→                                </DropdownMenuItem>
+   744→   744→                                {!isSelf && (
+   745→   745→                                  <>
+   746→   746→                                    <DropdownMenuSeparator />
+   747→   747→                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDeleteDialog(member)}>
+   748→   748→                                      <Trash2 className="h-4 w-4 mr-2" />Delete User
+   749→   749→                                    </DropdownMenuItem>
+   750→   750→                                  </>
+   751→   751→                                )}
+   752→   752→                              </DropdownMenuContent>
+   753→   753→                            </DropdownMenu>
+   754→   754→                          </TableCell>
+   755→   755→                        </TableRow>
+   756→   756→                      );
+   757→   757→                    })}
+   758→   758→                  </TableBody>
+   759→   759→                </Table>
+   760→   760→              </>
+   761→   761→            ) : (
+   762→   762→              /* Non-admin: compact staff list */
+   763→   763→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   764→   764→                {staffByRole.map(({ role, members }) => (
+   765→   765→                  <div key={role} className="rounded-lg border p-3 bg-muted/30">
+   766→   766→                    <div className="flex items-center gap-2 mb-2">
+   767→   767→                      <span className="text-base">{ROLE_ICONS[role]}</span>
+   768→   768→                      <h4 className="font-semibold text-xs">{ROLE_LABELS[role]}</h4>
+   769→   769→                      <Badge variant="outline" className="text-[9px] ml-auto">{members.length}</Badge>
+   770→   770→                    </div>
+   771→   771→                    <div className="space-y-1.5">
+   772→   772→                      {members.map((m) => (
+   773→   773→                        <div key={m.id} className="flex items-center gap-2 text-xs">
+   774→   774→                          <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-semibold ${m.active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+   775→   775→                            {getInitials(m.name)}
+   776→   776→                          </div>
+   777→   777→                          <span className="truncate">{m.name}</span>
+   778→   778→                        </div>
+   779→   779→                      ))}
+   780→   780→                    </div>
+   781→   781→                  </div>
+   782→   782→                ))}
+   783→   783→              </div>
+   784→   784→            )}
+   785→   785→          </CardContent>
+   786→   786→        )}
+   787→   787→      </Card>
+   788→   788→
+   789→   789→      {/* ===== Create Staff Dialog ===== */}
+   790→   790→      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+   791→   791→        <DialogContent className="sm:max-w-[480px]">
+   792→   792→          <DialogHeader>
+   793→   793→            <DialogTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" />Add New Staff Member</DialogTitle>
+   794→   794→            <DialogDescription>Create a new staff account and assign their role. Permissions are assigned automatically.</DialogDescription>
+   795→   795→          </DialogHeader>
+   796→   796→          <div className="grid gap-3.5 py-1">
+   797→   797→            <div className="grid gap-1.5">
+   798→   798→              <Label htmlFor="c-name">Full Name *</Label>
+   799→   799→              <Input id="c-name" placeholder="e.g. Jane Smith" value={formName} onChange={(e) => setFormName(e.target.value)} />
+   800→   800→            </div>
+   801→   801→            <div className="grid gap-1.5">
+   802→   802→              <Label htmlFor="c-email">Email *</Label>
+   803→   803→              <Input id="c-email" type="email" placeholder="e.g. jane@ops.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
+   804→   804→            </div>
+   805→   805→            <div className="grid gap-1.5">
+   806→   806→              <Label htmlFor="c-phone">Phone *</Label>
+   807→   807→              <Input id="c-phone" type="tel" placeholder="e.g. 555-0200" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+   808→   808→            </div>
+   809→   809→            <div className="grid gap-1.5">
+   810→   810→              <Label htmlFor="c-role">Role *</Label>
+   811→   811→              <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
+   812→   812→                <SelectTrigger id="c-role"><SelectValue /></SelectTrigger>
+   813→   813→                <SelectContent>
+   814→   814→                  {ALL_ROLES.map((r) => (
+   815→   815→                    <SelectItem key={r} value={r}><span className="flex items-center gap-1.5"><span>{ROLE_ICONS[r]}</span>{ROLE_LABELS[r]}</span></SelectItem>
+   816→   816→                  ))}
+   817→   817→                </SelectContent>
+   818→   818→              </Select>
+   819→   819→            </div>
+   820→   820→            <div className="flex items-center gap-2.5">
+   821→   821→              <Switch checked={formActive} onCheckedChange={setFormActive} id="c-active" />
+   822→   822→              <Label htmlFor="c-active" className="text-sm">Active upon creation</Label>
+   823→   823→            </div>
+   824→   824→            <Separator />
+   825→   825→            <div>
+   826→   826→              <p className="text-xs font-medium text-muted-foreground mb-1">Permissions for {ROLE_LABELS[formRole]}</p>
+   827→   827→              <PermissionPreview role={formRole} />
+   828→   828→            </div>
+   829→   829→          </div>
+   830→   830→          <DialogFooter>
+   831→   831→            <Button variant="outline" onClick={() => { setCreateOpen(false); resetForm(); }}>Cancel</Button>
+   832→   832→            <Button onClick={handleCreate} disabled={submitting}>{submitting ? 'Creating...' : 'Create Staff Member'}</Button>
+   833→   833→          </DialogFooter>
+   834→   834→        </DialogContent>
+   835→   835→      </Dialog>
+   836→   836→
+   837→   837→      {/* ===== Edit Staff Dialog ===== */}
+   838→   838→      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+   839→   839→        <DialogContent className="sm:max-w-[480px]">
+   840→   840→          <DialogHeader>
+   841→   841→            <DialogTitle className="flex items-center gap-2"><Edit className="h-5 w-5" />Edit Staff Member</DialogTitle>
+   842→   842→            <DialogDescription>Update details and role. Changing role updates module permissions.</DialogDescription>
+   843→   843→          </DialogHeader>
+   844→   844→          <div className="grid gap-3.5 py-1">
+   845→   845→            <div className="grid gap-1.5">
+   846→   846→              <Label htmlFor="e-name">Full Name *</Label>
+   847→   847→              <Input id="e-name" value={formName} onChange={(e) => setFormName(e.target.value)} />
+   848→   848→            </div>
+   849→   849→            <div className="grid gap-1.5">
+   850→   850→              <Label htmlFor="e-email">Email *</Label>
+   851→   851→              <Input id="e-email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
+   852→   852→            </div>
+   853→   853→            <div className="grid gap-1.5">
+   854→   854→              <Label htmlFor="e-phone">Phone *</Label>
+   855→   855→              <Input id="e-phone" type="tel" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+   856→   856→            </div>
+   857→   857→            <div className="grid gap-1.5">
+   858→   858→              <Label htmlFor="e-role">Role *</Label>
+   859→   859→              <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
+   860→   860→                <SelectTrigger id="e-role"><SelectValue /></SelectTrigger>
+   861→   861→                <SelectContent>
+   862→   862→                  {ALL_ROLES.map((r) => (
+   863→   863→                    <SelectItem key={r} value={r}><span className="flex items-center gap-1.5"><span>{ROLE_ICONS[r]}</span>{ROLE_LABELS[r]}</span></SelectItem>
+   864→   864→                  ))}
+   865→   865→                </SelectContent>
+   866→   866→              </Select>
+   867→   867→            </div>
+   868→   868→            <div className="flex items-center gap-2.5">
+   869→   869→              <Switch checked={formActive} onCheckedChange={setFormActive} id="e-active" />
+   870→   870→              <Label htmlFor="e-active" className="text-sm">{formActive ? 'Active' : 'Inactive'}</Label>
+   871→   871→            </div>
+   872→   872→            <Separator />
+   873→   873→            <div>
+   874→   874→              <p className="text-xs font-medium text-muted-foreground mb-1">Permissions for {ROLE_LABELS[formRole]}</p>
+   875→   875→              <PermissionPreview role={formRole} />
+   876→   876→            </div>
+   877→   877→          </div>
+   878→   878→          <DialogFooter>
+   879→   879→            <Button variant="outline" onClick={() => { setEditOpen(false); setSelectedStaff(null); resetForm(); }}>Cancel</Button>
+   880→   880→            <Button onClick={handleEdit} disabled={submitting}>{submitting ? 'Saving...' : 'Save Changes'}</Button>
+   881→   881→          </DialogFooter>
+   882→   882→        </DialogContent>
+   883→   883→      </Dialog>
+   884→   884→
+   885→   885→      {/* ===== Delete Confirmation ===== */}
+   886→   886→      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+   887→   887→        <AlertDialogContent>
+   888→   888→          <AlertDialogHeader>
+   889→   889→            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Delete Staff Member</AlertDialogTitle>
+   890→   890→            <AlertDialogDescription>
+   891→   891→              Are you sure you want to delete <strong>{selectedStaff?.name}</strong>? This action cannot be undone.
+   892→   892→              {selectedStaff && hasActiveJobs(selectedStaff) && (
+   893→   893→                <div className="mt-3 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+   894→   894→                  <strong>Warning:</strong> This staff member has active job assignments. Reassign or complete those jobs first.
+   895→   895→                </div>
+   896→   896→              )}
+   897→   897→            </AlertDialogDescription>
+   898→   898→          </AlertDialogHeader>
+   899→   899→          <AlertDialogFooter>
+   900→   900→            <AlertDialogCancel onClick={() => { setDeleteOpen(false); setSelectedStaff(null); }}>Cancel</AlertDialogCancel>
+   901→   901→            <AlertDialogAction
+   902→   902→              onClick={handleDelete}
+   903→   903→              disabled={deleting || (selectedStaff ? hasActiveJobs(selectedStaff) : false)}
+   904→   904→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   905→   905→            >
+   906→   906→              {deleting ? 'Deleting...' : 'Delete Staff Member'}
+   907→   907→            </AlertDialogAction>
+   908→   908→          </AlertDialogFooter>
+   909→   909→        </AlertDialogContent>
+   910→   910→      </AlertDialog>
+   911→   911→    </>
+   912→   912→  );
+   913→   913→}
+   914→   914→
+   915→   915→// ---------------------------------------------------------------------------
+   916→   916→// Main Dashboard Component
+   917→   917→// ---------------------------------------------------------------------------
+   918→   918→
+   919→   919→export function DashboardPage() {
+   920→   920→  const [data, setData] = useState<DashboardData | null>(null);
+   921→   921→  const [staff, setStaff] = useState<StaffMember[]>([]);
+   922→   922→  const [loading, setLoading] = useState(true);
+   923→   923→  const [error, setError] = useState<string | null>(null);
+   924→   924→
+   925→   925→  const fetchStaff = useCallback(async () => {
+   926→   926→    try {
+   927→   927→      const res = await fetch('/api/staff');
+   928→   928→      if (res.ok) {
+   929→   929→        const staffJson: StaffMember[] = await res.json();
+   930→   930→        setStaff(staffJson);
+   931→   931→      }
+   932→   932→    } catch { /* silently fail for refresh */ }
+   933→   933→  }, []);
+   934→   934→
+   935→   935→  useEffect(() => {
+   936→   936→    let cancelled = false;
+   937→   937→    async function fetchDashboard() {
+   938→   938→      try {
+   939→   939→        const [dashRes, staffRes] = await Promise.all([fetch('/api/dashboard'), fetch('/api/staff')]);
+   940→   940→        if (!dashRes.ok) throw new Error(`Failed to fetch dashboard (${dashRes.status})`);
+   941→   941→        if (!staffRes.ok) throw new Error(`Failed to fetch staff (${staffRes.status})`);
+   942→   942→        const dashJson: DashboardData = await dashRes.json();
+   943→   943→        const staffJson: StaffMember[] = await staffRes.json();
+   944→   944→        if (!cancelled) { setData(dashJson); setStaff(staffJson); setLoading(false); }
+   945→   945→      } catch (err) {
+   946→   946→        if (!cancelled) { setError(err instanceof Error ? err.message : 'An error occurred'); setLoading(false); }
+   947→   947→      }
+   948→   948→    }
+   949→   949→    fetchDashboard();
+   950→   950→    return () => { cancelled = true; };
+   951→   951→  }, []);
+   952→   952→
+   953→   953→  if (error) {
+   954→   954→    return <div className="flex items-center justify-center h-64 text-destructive"><p>{error}</p></div>;
+   955→   955→  }
+   956→   956→
+   957→   957→  if (loading || !data) {
+   958→   958→    return (
+   959→   959→      <div className="space-y-6">
+   960→   960→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+   961→   961→          {Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)}
+   962→   962→        </div>
+   963→   963→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><ChartSkeleton /><ChartSkeleton /></div>
+   964→   964→        <TableSkeleton />
+   965→   965→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><TableSkeleton /><TableSkeleton /></div>
+   966→   966→      </div>
+   967→   967→    );
+   968→   968→  }
+   969→   969→
+   970→   970→  return (
+   971→   971→    <div className="space-y-6">
+   972→   972→      <KpiCards stats={data.stats} />
+   973→   973→
+   974→   974→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   975→   975→        <RevenueChart paidInvoices={data.paidInvoices} />
+   976→   976→        <JobsByStatusChart stats={data.stats} />
+   977→   977→      </div>
+   978→   978→
+   979→   979→      <UserRolesSection staff={staff} onRefreshStaff={fetchStaff} />
+   980→   980→
+   981→   981→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   982→   982→        <TechnicianPerformanceTable technicians={data.technicianStats} />
+   983→   983→        <RecentJobsTable jobs={data.recentJobs} />
+   984→   984→      </div>
+   985→   985→    </div>
+   986→   986→  );
+   987→   987→}
+   988→   988→

@@ -1,0 +1,988 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback } from 'react';
+     4→import {
+     5→  BarChart,
+     6→  Bar,
+     7→  PieChart,
+     8→  Pie,
+     9→  Cell,
+    10→  ResponsiveContainer,
+    11→  XAxis,
+    12→  YAxis,
+    13→  Tooltip,
+    14→  CartesianGrid,
+    15→  Legend,
+    16→} from 'recharts';
+    17→import {
+    18→  Users,
+    19→  Wrench,
+    20→  Clock,
+    21→  DollarSign,
+    22→  AlertTriangle,
+    23→  FileWarning,
+    24→  Shield,
+    25→  UserCheck,
+    26→  UserPlus,
+    27→  Edit,
+    28→  Trash2,
+    29→  XCircle,
+    30→  CheckCircle,
+    31→  ChevronDown,
+    32→  ChevronUp,
+    33→  Search,
+    34→  Key,
+    35→  ShieldCheck,
+    36→  MoreHorizontal,
+    37→  Plus,
+    38→} from 'lucide-react';
+    39→import { useAppStore, ROLE_LABELS, ROLE_COLORS, ROLE_ICONS, type UserRole } from '@/store/app-store';
+    40→import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+    41→import { Badge } from '@/components/ui/badge';
+    42→import { Button } from '@/components/ui/button';
+    43→import { Input } from '@/components/ui/input';
+    44→import { Label } from '@/components/ui/label';
+    45→import { Switch } from '@/components/ui/switch';
+    46→import { Skeleton } from '@/components/ui/skeleton';
+    47→import {
+    48→  Dialog,
+    49→  DialogContent,
+    50→  DialogDescription,
+    51→  DialogFooter,
+    52→  DialogHeader,
+    53→  DialogTitle,
+    54→} from '@/components/ui/dialog';
+    55→import {
+    56→  AlertDialog,
+    57→  AlertDialogAction,
+    58→  AlertDialogCancel,
+    59→  AlertDialogContent,
+    60→  AlertDialogDescription,
+    61→  AlertDialogFooter,
+    62→  AlertDialogHeader,
+    63→  AlertDialogTitle,
+    64→} from '@/components/ui/alert-dialog';
+    65→import {
+    66→  Select,
+    67→  SelectContent,
+    68→  SelectItem,
+    69→  SelectTrigger,
+    70→  SelectValue,
+    71→} from '@/components/ui/select';
+    72→import {
+    73→  Table,
+    74→  TableBody,
+    75→  TableCell,
+    76→  TableHead,
+    77→  TableHeader,
+    78→  TableRow,
+    79→} from '@/components/ui/table';
+    80→import {
+    81→  DropdownMenu,
+    82→  DropdownMenuContent,
+    83→  DropdownMenuItem,
+    84→  DropdownMenuSeparator,
+    85→  DropdownMenuTrigger,
+    86→} from '@/components/ui/dropdown-menu';
+    87→import { Separator } from '@/components/ui/separator';
+    88→import { toast } from 'sonner';
+    89→
+    90→// ---------------------------------------------------------------------------
+    91→// Types
+    92→// ---------------------------------------------------------------------------
+    93→
+    94→interface DashboardStats {
+    95→  totalCustomers: number;
+    96→  activeJobs: number;
+    97→  pendingJobs: number;
+    98→  completedJobs: number;
+    99→  totalRevenue: number;
+   100→  totalParts: number;
+   101→  totalInvoices: number;
+   102→  overdueInvoices: number;
+   103→}
+   104→
+   105→interface PaidInvoice {
+   106→  paidAt: string;
+   107→  total: number;
+   108→  paidAmount: number;
+   109→}
+   110→
+   111→interface TechnicianStat {
+   112→  id: string;
+   113→  name: string;
+   114→  totalJobs: number;
+   115→  completedJobs: number;
+   116→  activeJobs: number;
+   117→}
+   118→
+   119→interface RecentJob {
+   120→  id: string;
+   121→  jobNumber: string;
+   122→  description: string;
+   123→  status: string;
+   124→  createdAt: string;
+   125→  customer: { name: string };
+   126→  vehicle: { make: string; model: string; plateNumber: string };
+   127→  technician: { name: string };
+   128→}
+   129→
+   130→interface StaffMember {
+   131→  id: string;
+   132→  name: string;
+   133→  email: string;
+   134→  phone: string;
+   135→  role: string;
+   136→  active: boolean;
+   137→  createdAt: string;
+   138→  updatedAt: string;
+   139→  assignedJobs?: { id: string; status: string }[];
+   140→}
+   141→
+   142→interface DashboardData {
+   143→  stats: DashboardStats;
+   144→  lowStockParts: { id: string; partNumber: string; name: string; category: string; quantity: number; minStock: number; supplier: { name: string } }[];
+   145→  paidInvoices: PaidInvoice[];
+   146→  technicianStats: TechnicianStat[];
+   147→  recentJobs: RecentJob[];
+   148→}
+   149→
+   150→// Permission maps for display
+   151→const MODULE_ACCESS: Record<string, string[]> = {
+   152→  ADMIN: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Inventory', 'Billing', 'Reminders', 'Reports'],
+   153→  MANAGER: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing', 'Reminders', 'Reports'],
+   154→  SERVICE_ADVISOR: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing'],
+   155→  CASHIER: ['Dashboard', 'Customers', 'Billing'],
+   156→  STOREKEEPER: ['Dashboard', 'Inventory', 'Workshop'],
+   157→  TECHNICIAN: ['Dashboard', 'Workshop', 'Job Cards'],
+   158→};
+   159→
+   160→const MODULE_CREATE: Record<string, string[]> = {
+   161→  ADMIN: ['Customers', 'Job Cards', 'Inventory', 'Billing', 'Reminders'],
+   162→  MANAGER: ['Customers', 'Job Cards', 'Billing', 'Reminders'],
+   163→  SERVICE_ADVISOR: ['Customers', 'Job Cards'],
+   164→  CASHIER: ['Billing'],
+   165→  STOREKEEPER: ['Inventory'],
+   166→  TECHNICIAN: [],
+   167→};
+   168→
+   169→const MODULE_EDIT: Record<string, string[]> = {
+   170→  ADMIN: ['Customers', 'Job Cards', 'Inventory', 'Billing', 'Reminders'],
+   171→  MANAGER: ['Customers', 'Job Cards', 'Billing', 'Reminders'],
+   172→  SERVICE_ADVISOR: ['Customers', 'Job Cards'],
+   173→  CASHIER: ['Billing'],
+   174→  STOREKEEPER: ['Inventory'],
+   175→  TECHNICIAN: [],
+   176→};
+   177→
+   178→const MODULE_APPROVE: Record<string, string[]> = {
+   179→  ADMIN: ['Job Cards', 'Billing'],
+   180→  MANAGER: ['Job Cards', 'Billing'],
+   181→  SERVICE_ADVISOR: [],
+   182→  CASHIER: [],
+   183→  STOREKEEPER: [],
+   184→  TECHNICIAN: [],
+   185→};
+   186→
+   187→// ---------------------------------------------------------------------------
+   188→// Helpers
+   189→// ---------------------------------------------------------------------------
+   190→
+   191→function formatCurrency(value: number): string {
+   192→  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+   193→}
+   194→
+   195→function getStatusBadge(status: string) {
+   196→  switch (status) {
+   197→    case 'PENDING': return <Badge variant="secondary">{status}</Badge>;
+   198→    case 'IN_PROGRESS': return <Badge className="bg-blue-100 text-blue-800 border-transparent">{status.replace('_', ' ')}</Badge>;
+   199→    case 'WAITING_PARTS': return <Badge className="bg-amber-100 text-amber-800 border-transparent">{status.replace('_', ' ')}</Badge>;
+   200→    case 'COMPLETED': return <Badge className="bg-green-100 text-green-800 border-transparent">{status}</Badge>;
+   201→    case 'APPROVED': return <Badge className="bg-emerald-100 text-emerald-800 border-transparent">{status}</Badge>;
+   202→    case 'INVOICED': return <Badge className="bg-purple-100 text-purple-800 border-transparent">{status}</Badge>;
+   203→    case 'CANCELLED': return <Badge variant="destructive">{status}</Badge>;
+   204→    case 'DRAFT': return <Badge variant="secondary">{status}</Badge>;
+   205→    case 'PAID': return <Badge className="bg-green-100 text-green-800 border-transparent">{status}</Badge>;
+   206→    case 'SENT': return <Badge className="bg-blue-100 text-blue-800 border-transparent">{status}</Badge>;
+   207→    case 'OVERDUE': return <Badge className="bg-red-100 text-red-800 border-transparent">{status}</Badge>;
+   208→    default: return <Badge variant="secondary">{status}</Badge>;
+   209→  }
+   210→}
+   211→
+   212→function getInitials(name: string): string {
+   213→  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+   214→}
+   215→
+   216→// ---------------------------------------------------------------------------
+   217→// KPI Cards
+   218→// ---------------------------------------------------------------------------
+   219→
+   220→function KpiCardSkeleton() {
+   221→  return (
+   222→    <Card className="p-4">
+   223→      <div className="flex items-center gap-4">
+   224→        <Skeleton className="h-12 w-12 rounded-lg" />
+   225→        <div className="flex-1 space-y-2">
+   226→          <Skeleton className="h-4 w-24" />
+   227→          <Skeleton className="h-7 w-16" />
+   228→        </div>
+   229→      </div>
+   230→    </Card>
+   231→  );
+   232→}
+   233→
+   234→function KpiCards({ stats }: { stats: DashboardStats }) {
+   235→  const kpis = [
+   236→    { label: 'Total Customers', value: stats.totalCustomers, icon: Users, iconBg: 'bg-slate-100 text-slate-600', format: 'number' as const },
+   237→    { label: 'Active Jobs', value: stats.activeJobs, icon: Wrench, iconBg: 'bg-blue-100 text-blue-600', format: 'number' as const },
+   238→    { label: 'Pending Jobs', value: stats.pendingJobs, icon: Clock, iconBg: 'bg-amber-100 text-amber-600', format: 'number' as const },
+   239→    { label: 'Total Revenue', value: stats.totalRevenue, icon: DollarSign, iconBg: 'bg-green-100 text-green-600', format: 'currency' as const },
+   240→    { label: 'Low Stock Alerts', value: stats.totalParts, icon: AlertTriangle, iconBg: 'bg-orange-100 text-orange-600', format: 'number' as const },
+   241→    { label: 'Overdue Invoices', value: stats.overdueInvoices, icon: FileWarning, iconBg: 'bg-red-100 text-red-600', format: 'number' as const },
+   242→  ];
+   243→
+   244→  return (
+   245→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+   246→      {kpis.map((kpi) => {
+   247→        const Icon = kpi.icon;
+   248→        return (
+   249→          <Card key={kpi.label} className="p-4">
+   250→            <div className="flex items-center gap-4">
+   251→              <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${kpi.iconBg}`}>
+   252→                <Icon className="h-6 w-6" />
+   253→              </div>
+   254→              <div className="min-w-0">
+   255→                <p className="text-sm text-muted-foreground truncate">{kpi.label}</p>
+   256→                <p className="text-2xl font-bold tracking-tight">
+   257→                  {kpi.format === 'currency' ? formatCurrency(kpi.value) : kpi.value}
+   258→                </p>
+   259→              </div>
+   260→            </div>
+   261→          </Card>
+   262→        );
+   263→      })}
+   264→    </div>
+   265→  );
+   266→}
+   267→
+   268→// ---------------------------------------------------------------------------
+   269→// Charts
+   270→// ---------------------------------------------------------------------------
+   271→
+   272→function ChartSkeleton() {
+   273→  return (
+   274→    <Card>
+   275→      <CardHeader><Skeleton className="h-5 w-40" /></CardHeader>
+   276→      <CardContent><Skeleton className="h-[300px] w-full rounded-md" /></CardContent>
+   277→    </Card>
+   278→  );
+   279→}
+   280→
+   281→const PIE_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#64748b', '#ef4444'];
+   282→
+   283→function RevenueChart({ paidInvoices }: { paidInvoices: PaidInvoice[] }) {
+   284→  const monthMap = new Map<string, number>();
+   285→  paidInvoices.forEach((inv) => {
+   286→    const date = new Date(inv.paidAt);
+   287→    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+   288→    monthMap.set(key, (monthMap.get(key) ?? 0) + inv.paidAmount);
+   289→  });
+   290→  const data = Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([month, revenue]) => ({ month, revenue: Math.round(revenue * 100) / 100 }));
+   291→
+   292→  return (
+   293→    <Card>
+   294→      <CardHeader><CardTitle>Revenue Trend</CardTitle></CardHeader>
+   295→      <CardContent>
+   296→        {data.length === 0 ? (
+   297→          <div className="flex h-[300px] items-center justify-center text-muted-foreground">No revenue data available</div>
+   298→        ) : (
+   299→          <ResponsiveContainer width="100%" height={300}>
+   300→            <BarChart data={data}>
+   301→              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+   302→              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+   303→              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+   304→              <Tooltip formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+   305→              <Legend />
+   306→              <Bar dataKey="revenue" fill="#22c55e" radius={[4, 4, 0, 0]} name="Revenue" />
+   307→            </BarChart>
+   308→          </ResponsiveContainer>
+   309→        )}
+   310→      </CardContent>
+   311→    </Card>
+   312→  );
+   313→}
+   314→
+   315→function JobsByStatusChart({ stats }: { stats: DashboardStats }) {
+   316→  const data = [
+   317→    { name: 'Completed', value: stats.completedJobs },
+   318→    { name: 'Active', value: stats.activeJobs },
+   319→    { name: 'Pending', value: stats.pendingJobs },
+   320→  ].filter((d) => d.value > 0);
+   321→
+   322→  return (
+   323→    <Card>
+   324→      <CardHeader><CardTitle>Jobs by Status</CardTitle></CardHeader>
+   325→      <CardContent>
+   326→        {data.length === 0 ? (
+   327→          <div className="flex h-[300px] items-center justify-center text-muted-foreground">No jobs data available</div>
+   328→        ) : (
+   329→          <ResponsiveContainer width="100%" height={300}>
+   330→            <PieChart>
+   331→              <Pie data={data} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value"
+   332→                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+   333→                {data.map((_, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+   334→              </Pie>
+   335→              <Tooltip /><Legend />
+   336→            </PieChart>
+   337→          </ResponsiveContainer>
+   338→        )}
+   339→      </CardContent>
+   340→    </Card>
+   341→  );
+   342→}
+   343→
+   344→// ---------------------------------------------------------------------------
+   345→// Tables
+   346→// ---------------------------------------------------------------------------
+   347→
+   348→function TableSkeleton() {
+   349→  return (
+   350→    <Card>
+   351→      <CardHeader><Skeleton className="h-5 w-48" /></CardHeader>
+   352→      <CardContent><div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div></CardContent>
+   353→    </Card>
+   354→  );
+   355→}
+   356→
+   357→function TechnicianPerformanceTable({ technicians }: { technicians: TechnicianStat[] }) {
+   358→  return (
+   359→    <Card>
+   360→      <CardHeader><CardTitle>Technician Performance</CardTitle></CardHeader>
+   361→      <CardContent>
+   362→        <Table>
+   363→          <TableHeader>
+   364→            <TableRow>
+   365→              <TableHead>Name</TableHead>
+   366→              <TableHead className="text-right">Total Jobs</TableHead>
+   367→              <TableHead className="text-right">Completed</TableHead>
+   368→              <TableHead className="text-right">Active</TableHead>
+   369→            </TableRow>
+   370→          </TableHeader>
+   371→          <TableBody>
+   372→            {technicians.length === 0 ? (
+   373→              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No technician data</TableCell></TableRow>
+   374→            ) : technicians.map((tech) => (
+   375→              <TableRow key={tech.id}>
+   376→                <TableCell className="font-medium">{tech.name}</TableCell>
+   377→                <TableCell className="text-right">{tech.totalJobs}</TableCell>
+   378→                <TableCell className="text-right">{tech.completedJobs}</TableCell>
+   379→                <TableCell className="text-right">{tech.activeJobs}</TableCell>
+   380→              </TableRow>
+   381→            ))}
+   382→          </TableBody>
+   383→        </Table>
+   384→      </CardContent>
+   385→    </Card>
+   386→  );
+   387→}
+   388→
+   389→function RecentJobsTable({ jobs }: { jobs: RecentJob[] }) {
+   390→  return (
+   391→    <Card>
+   392→      <CardHeader><CardTitle>Recent Jobs</CardTitle></CardHeader>
+   393→      <CardContent>
+   394→        <Table>
+   395→          <TableHeader>
+   396→            <TableRow>
+   397→              <TableHead>Job #</TableHead>
+   398→              <TableHead>Customer</TableHead>
+   399→              <TableHead>Vehicle</TableHead>
+   400→              <TableHead>Status</TableHead>
+   401→              <TableHead>Technician</TableHead>
+   402→            </TableRow>
+   403→          </TableHeader>
+   404→          <TableBody>
+   405→            {jobs.length === 0 ? (
+   406→              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No recent jobs</TableCell></TableRow>
+   407→            ) : jobs.map((job) => (
+   408→              <TableRow key={job.id}>
+   409→                <TableCell className="font-medium">{job.jobNumber}</TableCell>
+   410→                <TableCell>{job.customer.name}</TableCell>
+   411→                <TableCell>{`${job.vehicle.make} ${job.vehicle.model} (${job.vehicle.plateNumber})`}</TableCell>
+   412→                <TableCell>{getStatusBadge(job.status)}</TableCell>
+   413→                <TableCell>{job.technician.name}</TableCell>
+   414→              </TableRow>
+   415→            ))}
+   416→          </TableBody>
+   417→        </Table>
+   418→      </CardContent>
+   419→    </Card>
+   420→  );
+   421→}
+   422→
+   423→// ---------------------------------------------------------------------------
+   424→// Permission Preview (used in dialogs)
+   425→// ---------------------------------------------------------------------------
+   426→
+   427→function PermissionPreview({ role }: { role: UserRole }) {
+   428→  return (
+   429→    <div className="space-y-3 mt-3">
+   430→      <div>
+   431→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-green-500" /> Module Access</h4>
+   432→        <div className="flex flex-wrap gap-1">{(MODULE_ACCESS[role] || []).map((mod) => <Badge key={mod} variant="outline" className="text-[10px] px-1.5 py-0">{mod}</Badge>)}</div>
+   433→      </div>
+   434→      <div>
+   435→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><UserPlus className="h-3.5 w-3.5 text-blue-500" /> Can Create</h4>
+   436→        <div className="flex flex-wrap gap-1">
+   437→          {MODULE_CREATE[role]?.length > 0 ? MODULE_CREATE[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   438→        </div>
+   439→      </div>
+   440→      <div>
+   441→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><Edit className="h-3.5 w-3.5 text-amber-500" /> Can Edit</h4>
+   442→        <div className="flex flex-wrap gap-1">
+   443→          {MODULE_EDIT[role]?.length > 0 ? MODULE_EDIT[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   444→        </div>
+   445→      </div>
+   446→      <div>
+   447→        <h4 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5"><Key className="h-3.5 w-3.5 text-purple-500" /> Can Approve</h4>
+   448→        <div className="flex flex-wrap gap-1">
+   449→          {MODULE_APPROVE[role]?.length > 0 ? MODULE_APPROVE[role].map((mod) => <Badge key={mod} className="text-[10px] px-1.5 py-0 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-transparent">{mod}</Badge>) : <span className="text-xs text-muted-foreground">None</span>}
+   450→        </div>
+   451→      </div>
+   452→    </div>
+   453→  );
+   454→}
+   455→
+   456→// ---------------------------------------------------------------------------
+   457→// User Roles Section (with inline user management for Admin)
+   458→// ---------------------------------------------------------------------------
+   459→
+   460→const ALL_ROLES: UserRole[] = ['ADMIN', 'MANAGER', 'SERVICE_ADVISOR', 'CASHIER', 'STOREKEEPER', 'TECHNICIAN'];
+   461→
+   462→function UserRolesSection({
+   463→  staff,
+   464→  onRefreshStaff,
+   465→}: {
+   466→  staff: StaffMember[];
+   467→  onRefreshStaff: () => void;
+   468→}) {
+   469→  const currentUser = useAppStore((s) => s.currentUser);
+   470→  const isAdmin = currentUser?.role === 'ADMIN';
+   471→
+   472→  const [expanded, setExpanded] = useState(true);
+   473→  const [search, setSearch] = useState('');
+   474→  const [roleFilter, setRoleFilter] = useState<string>('all');
+   475→
+   476→  // Dialog states
+   477→  const [createOpen, setCreateOpen] = useState(false);
+   478→  const [editOpen, setEditOpen] = useState(false);
+   479→  const [deleteOpen, setDeleteOpen] = useState(false);
+   480→
+   481→  // Selected staff
+   482→  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+   483→
+   484→  // Form states
+   485→  const [formName, setFormName] = useState('');
+   486→  const [formEmail, setFormEmail] = useState('');
+   487→  const [formPhone, setFormPhone] = useState('');
+   488→  const [formRole, setFormRole] = useState<UserRole>('TECHNICIAN');
+   489→  const [formActive, setFormActive] = useState(true);
+   490→  const [submitting, setSubmitting] = useState(false);
+   491→  const [deleting, setDeleting] = useState(false);
+   492→
+   493→  // Filtered staff
+   494→  const filteredStaff = staff.filter((s) => {
+   495→    const matchSearch = search === '' || s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase()) || s.phone.includes(search);
+   496→    const matchRole = roleFilter === 'all' || s.role === roleFilter;
+   497→    return matchSearch && matchRole;
+   498→  });
+   499→
+   500→  // Staff by role for role cards
+   501→  const staffByRole = ALL_ROLES.map((role) => {
+   502→    const members = staff.filter((s) => s.role === role);
+   503→    const activeCount = members.filter((s) => s.active).length;
+   504→    return { role, members, activeCount };
+   505→  });
+   506→
+   507→  const resetForm = () => {
+   508→    setFormName('');
+   509→    setFormEmail('');
+   510→    setFormPhone('');
+   511→    setFormRole('TECHNICIAN');
+   512→    setFormActive(true);
+   513→  };
+   514→
+   515→  // ---- Create Handler ----
+   516→  const handleCreate = async () => {
+   517→    if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
+   518→      toast.error('Please fill in all required fields');
+   519→      return;
+   520→    }
+   521→    setSubmitting(true);
+   522→    try {
+   523→      const res = await fetch('/api/staff', {
+   524→        method: 'POST',
+   525→        headers: { 'Content-Type': 'application/json' },
+   526→        body: JSON.stringify({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim(), role: formRole, active: formActive }),
+   527→      });
+   528→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   529→      toast.success(`${formName.trim()} created successfully`);
+   530→      setCreateOpen(false);
+   531→      resetForm();
+   532→      onRefreshStaff();
+   533→    } catch (err) {
+   534→      toast.error(err instanceof Error ? err.message : 'Failed to create');
+   535→    } finally { setSubmitting(false); }
+   536→  };
+   537→
+   538→  // ---- Edit Handler ----
+   539→  const handleEdit = async () => {
+   540→    if (!selectedStaff || !formName.trim() || !formEmail.trim() || !formPhone.trim()) {
+   541→      toast.error('Please fill in all required fields');
+   542→      return;
+   543→    }
+   544→    setSubmitting(true);
+   545→    try {
+   546→      const res = await fetch(`/api/staff/${selectedStaff.id}`, {
+   547→        method: 'PUT',
+   548→        headers: { 'Content-Type': 'application/json' },
+   549→        body: JSON.stringify({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim(), role: formRole, active: formActive }),
+   550→      });
+   551→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   552→      toast.success(`${formName.trim()} updated successfully`);
+   553→      setEditOpen(false);
+   554→      setSelectedStaff(null);
+   555→      resetForm();
+   556→      onRefreshStaff();
+   557→    } catch (err) {
+   558→      toast.error(err instanceof Error ? err.message : 'Failed to update');
+   559→    } finally { setSubmitting(false); }
+   560→  };
+   561→
+   562→  // ---- Delete Handler ----
+   563→  const handleDelete = async () => {
+   564→    if (!selectedStaff) return;
+   565→    setDeleting(true);
+   566→    try {
+   567→      const res = await fetch(`/api/staff/${selectedStaff.id}`, { method: 'DELETE' });
+   568→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   569→      toast.success(`${selectedStaff.name} deleted`);
+   570→      setDeleteOpen(false);
+   571→      setSelectedStaff(null);
+   572→      onRefreshStaff();
+   573→    } catch (err) {
+   574→      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+   575→    } finally { setDeleting(false); }
+   576→  };
+   577→
+   578→  // ---- Toggle Active Handler ----
+   579→  const handleToggleActive = async (member: StaffMember) => {
+   580→    try {
+   581→      const res = await fetch(`/api/staff/${member.id}`, {
+   582→        method: 'PUT',
+   583→        headers: { 'Content-Type': 'application/json' },
+   584→        body: JSON.stringify({ active: !member.active }),
+   585→      });
+   586→      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+   587→      toast.success(`${member.name} ${!member.active ? 'activated' : 'deactivated'}`);
+   588→      onRefreshStaff();
+   589→    } catch (err) {
+   590→      toast.error(err instanceof Error ? err.message : 'Failed');
+   591→    }
+   592→  };
+   593→
+   594→  const openEditDialog = (member: StaffMember) => {
+   595→    setSelectedStaff(member);
+   596→    setFormName(member.name);
+   597→    setFormEmail(member.email);
+   598→    setFormPhone(member.phone);
+   599→    setFormRole(member.role as UserRole);
+   600→    setFormActive(member.active);
+   601→    setEditOpen(true);
+   602→  };
+   603→
+   604→  const openDeleteDialog = (member: StaffMember) => {
+   605→    setSelectedStaff(member);
+   606→    setDeleteOpen(true);
+   607→  };
+   608→
+   609→  const hasActiveJobs = (member: StaffMember) =>
+   610→    (member.assignedJobs || []).some((j) => ['PENDING', 'IN_PROGRESS', 'WAITING_PARTS'].includes(j.status));
+   611→
+   612→  return (
+   613→    <>
+   614→      <Card>
+   615→        <CardHeader>
+   616→          <div className="flex items-center justify-between">
+   617→            <CardTitle className="flex items-center gap-2">
+   618→              <Shield className="h-5 w-5" />
+   619→              User Roles & Staff
+   620→            </CardTitle>
+   621→            <div className="flex items-center gap-2">
+   622→              {isAdmin && (
+   623→                <Button size="sm" className="text-xs h-8" onClick={() => { resetForm(); setCreateOpen(true); }}>
+   624→                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+   625→                  Add Staff
+   626→                </Button>
+   627→              )}
+   628→              <Button variant="ghost" size="sm" className="text-xs h-8 px-2" onClick={() => setExpanded(!expanded)}>
+   629→                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+   630→              </Button>
+   631→            </div>
+   632→          </div>
+   633→          <CardDescription className="mt-1">
+   634→            {staff.length} staff member{staff.length !== 1 ? 's' : ''} across {ALL_ROLES.length} roles
+   635→          </CardDescription>
+   636→        </CardHeader>
+   637→
+   638→        {expanded && (
+   639→          <CardContent className="space-y-6">
+   640→            {/* Role Cards Overview */}
+   641→            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+   642→              {staffByRole.map(({ role, members, activeCount }) => {
+   643→                const isCurrentRole = currentUser?.role === role;
+   644→                return (
+   645→                  <div
+   646→                    key={role}
+   647→                    className={`rounded-lg border p-3 transition-all text-center cursor-default ${
+   648→                      isCurrentRole ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20' : 'bg-muted/30 hover:bg-muted/50'
+   649→                    }`}
+   650→                  >
+   651→                    <span className="text-2xl">{ROLE_ICONS[role]}</span>
+   652→                    <h4 className="font-semibold text-xs mt-1.5 leading-none">{ROLE_LABELS[role]}</h4>
+   653→                    <p className="text-[10px] text-muted-foreground mt-0.5">
+   654→                      {activeCount}/{members.length} active
+   655→                    </p>
+   656→                    {isCurrentRole && (
+   657→                      <Badge className="text-[9px] px-1 py-0 mt-1">
+   658→                        <UserCheck className="h-2.5 w-2.5 mr-0.5" /> You
+   659→                      </Badge>
+   660→                    )}
+   661→                  </div>
+   662→                );
+   663→              })}
+   664→            </div>
+   665→
+   666→            {/* Staff Table (Admin sees full table; others see compact list) */}
+   667→            {isAdmin ? (
+   668→              <>
+   669→                {/* Search and filter row */}
+   670→                <div className="flex flex-col sm:flex-row gap-2">
+   671→                  <div className="relative flex-1">
+   672→                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   673→                    <Input placeholder="Search by name, email, or phone..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+   674→                  </div>
+   675→                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+   676→                    <SelectTrigger className="w-full sm:w-40 h-9">
+   677→                      <SelectValue placeholder="All Roles" />
+   678→                    </SelectTrigger>
+   679→                    <SelectContent>
+   680→                      <SelectItem value="all">All Roles</SelectItem>
+   681→                      {ALL_ROLES.map((r) => (
+   682→                        <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+   683→                      ))}
+   684→                    </SelectContent>
+   685→                  </Select>
+   686→                </div>
+   687→
+   688→                <Table>
+   689→                  <TableHeader>
+   690→                    <TableRow>
+   691→                      <TableHead>Staff Member</TableHead>
+   692→                      <TableHead className="hidden md:table-cell">Email</TableHead>
+   693→                      <TableHead>Role</TableHead>
+   694→                      <TableHead className="hidden sm:table-cell">Status</TableHead>
+   695→                      <TableHead className="text-right">Actions</TableHead>
+   696→                    </TableRow>
+   697→                  </TableHeader>
+   698→                  <TableBody>
+   699→                    {filteredStaff.length === 0 ? (
+   700→                      <TableRow><TableCell colSpan={5} className="h-20 text-center text-muted-foreground">No staff members found</TableCell></TableRow>
+   701→                    ) : filteredStaff.map((member) => {
+   702→                      const isSelf = currentUser?.id === member.id;
+   703→                      return (
+   704→                        <TableRow key={member.id} className={!member.active ? 'opacity-60' : ''}>
+   705→                          <TableCell>
+   706→                            <div className="flex items-center gap-2.5">
+   707→                              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-semibold ring-2 ring-background ${member.active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+   708→                                {getInitials(member.name)}
+   709→                              </div>
+   710→                              <div>
+   711→                                <p className="font-medium text-sm leading-none">
+   712→                                  {member.name}
+   713→                                  {isSelf && <Badge variant="secondary" className="ml-1.5 text-[9px] px-1 py-0">You</Badge>}
+   714→                                </p>
+   715→                                <p className="text-xs text-muted-foreground mt-0.5 md:hidden truncate max-w-[160px]">{member.email}</p>
+   716→                              </div>
+   717→                            </div>
+   718→                          </TableCell>
+   719→                          <TableCell className="hidden md:table-cell text-sm">{member.email}</TableCell>
+   720→                          <TableCell>
+   721→                            <Badge className={`text-[10px] font-medium ${ROLE_COLORS[member.role as UserRole]}`}>
+   722→                              <span className="mr-0.5">{ROLE_ICONS[member.role as UserRole]}</span>
+   723→                              {ROLE_LABELS[member.role as UserRole]}
+   724→                            </Badge>
+   725→                          </TableCell>
+   726→                          <TableCell className="hidden sm:table-cell">
+   727→                            <div className="flex items-center gap-1.5">
+   728→                              <div className={`h-2 w-2 rounded-full ${member.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+   729→                              <span className="text-xs text-muted-foreground">{member.active ? 'Active' : 'Inactive'}</span>
+   730→                            </div>
+   731→                          </TableCell>
+   732→                          <TableCell className="text-right">
+   733→                            <DropdownMenu>
+   734→                              <DropdownMenuTrigger asChild>
+   735→                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+   736→                              </DropdownMenuTrigger>
+   737→                              <DropdownMenuContent align="end">
+   738→                                <DropdownMenuItem onClick={() => openEditDialog(member)}>
+   739→                                  <Edit className="h-4 w-4 mr-2" />Edit Role &amp; Info
+   740→                                </DropdownMenuItem>
+   741→                                <DropdownMenuItem onClick={() => handleToggleActive(member)}>
+   742→                                  {member.active ? <><XCircle className="h-4 w-4 mr-2" />Deactivate</> : <><CheckCircle className="h-4 w-4 mr-2" />Activate</>}
+   743→                                </DropdownMenuItem>
+   744→                                {!isSelf && (
+   745→                                  <>
+   746→                                    <DropdownMenuSeparator />
+   747→                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDeleteDialog(member)}>
+   748→                                      <Trash2 className="h-4 w-4 mr-2" />Delete User
+   749→                                    </DropdownMenuItem>
+   750→                                  </>
+   751→                                )}
+   752→                              </DropdownMenuContent>
+   753→                            </DropdownMenu>
+   754→                          </TableCell>
+   755→                        </TableRow>
+   756→                      );
+   757→                    })}
+   758→                  </TableBody>
+   759→                </Table>
+   760→              </>
+   761→            ) : (
+   762→              /* Non-admin: compact staff list */
+   763→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   764→                {staffByRole.map(({ role, members }) => (
+   765→                  <div key={role} className="rounded-lg border p-3 bg-muted/30">
+   766→                    <div className="flex items-center gap-2 mb-2">
+   767→                      <span className="text-base">{ROLE_ICONS[role]}</span>
+   768→                      <h4 className="font-semibold text-xs">{ROLE_LABELS[role]}</h4>
+   769→                      <Badge variant="outline" className="text-[9px] ml-auto">{members.length}</Badge>
+   770→                    </div>
+   771→                    <div className="space-y-1.5">
+   772→                      {members.map((m) => (
+   773→                        <div key={m.id} className="flex items-center gap-2 text-xs">
+   774→                          <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-semibold ${m.active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+   775→                            {getInitials(m.name)}
+   776→                          </div>
+   777→                          <span className="truncate">{m.name}</span>
+   778→                        </div>
+   779→                      ))}
+   780→                    </div>
+   781→                  </div>
+   782→                ))}
+   783→              </div>
+   784→            )}
+   785→          </CardContent>
+   786→        )}
+   787→      </Card>
+   788→
+   789→      {/* ===== Create Staff Dialog ===== */}
+   790→      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+   791→        <DialogContent className="sm:max-w-[480px]">
+   792→          <DialogHeader>
+   793→            <DialogTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" />Add New Staff Member</DialogTitle>
+   794→            <DialogDescription>Create a new staff account and assign their role. Permissions are assigned automatically.</DialogDescription>
+   795→          </DialogHeader>
+   796→          <div className="grid gap-3.5 py-1">
+   797→            <div className="grid gap-1.5">
+   798→              <Label htmlFor="c-name">Full Name *</Label>
+   799→              <Input id="c-name" placeholder="e.g. Jane Smith" value={formName} onChange={(e) => setFormName(e.target.value)} />
+   800→            </div>
+   801→            <div className="grid gap-1.5">
+   802→              <Label htmlFor="c-email">Email *</Label>
+   803→              <Input id="c-email" type="email" placeholder="e.g. jane@ops.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
+   804→            </div>
+   805→            <div className="grid gap-1.5">
+   806→              <Label htmlFor="c-phone">Phone *</Label>
+   807→              <Input id="c-phone" type="tel" placeholder="e.g. 555-0200" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+   808→            </div>
+   809→            <div className="grid gap-1.5">
+   810→              <Label htmlFor="c-role">Role *</Label>
+   811→              <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
+   812→                <SelectTrigger id="c-role"><SelectValue /></SelectTrigger>
+   813→                <SelectContent>
+   814→                  {ALL_ROLES.map((r) => (
+   815→                    <SelectItem key={r} value={r}><span className="flex items-center gap-1.5"><span>{ROLE_ICONS[r]}</span>{ROLE_LABELS[r]}</span></SelectItem>
+   816→                  ))}
+   817→                </SelectContent>
+   818→              </Select>
+   819→            </div>
+   820→            <div className="flex items-center gap-2.5">
+   821→              <Switch checked={formActive} onCheckedChange={setFormActive} id="c-active" />
+   822→              <Label htmlFor="c-active" className="text-sm">Active upon creation</Label>
+   823→            </div>
+   824→            <Separator />
+   825→            <div>
+   826→              <p className="text-xs font-medium text-muted-foreground mb-1">Permissions for {ROLE_LABELS[formRole]}</p>
+   827→              <PermissionPreview role={formRole} />
+   828→            </div>
+   829→          </div>
+   830→          <DialogFooter>
+   831→            <Button variant="outline" onClick={() => { setCreateOpen(false); resetForm(); }}>Cancel</Button>
+   832→            <Button onClick={handleCreate} disabled={submitting}>{submitting ? 'Creating...' : 'Create Staff Member'}</Button>
+   833→          </DialogFooter>
+   834→        </DialogContent>
+   835→      </Dialog>
+   836→
+   837→      {/* ===== Edit Staff Dialog ===== */}
+   838→      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+   839→        <DialogContent className="sm:max-w-[480px]">
+   840→          <DialogHeader>
+   841→            <DialogTitle className="flex items-center gap-2"><Edit className="h-5 w-5" />Edit Staff Member</DialogTitle>
+   842→            <DialogDescription>Update details and role. Changing role updates module permissions.</DialogDescription>
+   843→          </DialogHeader>
+   844→          <div className="grid gap-3.5 py-1">
+   845→            <div className="grid gap-1.5">
+   846→              <Label htmlFor="e-name">Full Name *</Label>
+   847→              <Input id="e-name" value={formName} onChange={(e) => setFormName(e.target.value)} />
+   848→            </div>
+   849→            <div className="grid gap-1.5">
+   850→              <Label htmlFor="e-email">Email *</Label>
+   851→              <Input id="e-email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
+   852→            </div>
+   853→            <div className="grid gap-1.5">
+   854→              <Label htmlFor="e-phone">Phone *</Label>
+   855→              <Input id="e-phone" type="tel" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} />
+   856→            </div>
+   857→            <div className="grid gap-1.5">
+   858→              <Label htmlFor="e-role">Role *</Label>
+   859→              <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
+   860→                <SelectTrigger id="e-role"><SelectValue /></SelectTrigger>
+   861→                <SelectContent>
+   862→                  {ALL_ROLES.map((r) => (
+   863→                    <SelectItem key={r} value={r}><span className="flex items-center gap-1.5"><span>{ROLE_ICONS[r]}</span>{ROLE_LABELS[r]}</span></SelectItem>
+   864→                  ))}
+   865→                </SelectContent>
+   866→              </Select>
+   867→            </div>
+   868→            <div className="flex items-center gap-2.5">
+   869→              <Switch checked={formActive} onCheckedChange={setFormActive} id="e-active" />
+   870→              <Label htmlFor="e-active" className="text-sm">{formActive ? 'Active' : 'Inactive'}</Label>
+   871→            </div>
+   872→            <Separator />
+   873→            <div>
+   874→              <p className="text-xs font-medium text-muted-foreground mb-1">Permissions for {ROLE_LABELS[formRole]}</p>
+   875→              <PermissionPreview role={formRole} />
+   876→            </div>
+   877→          </div>
+   878→          <DialogFooter>
+   879→            <Button variant="outline" onClick={() => { setEditOpen(false); setSelectedStaff(null); resetForm(); }}>Cancel</Button>
+   880→            <Button onClick={handleEdit} disabled={submitting}>{submitting ? 'Saving...' : 'Save Changes'}</Button>
+   881→          </DialogFooter>
+   882→        </DialogContent>
+   883→      </Dialog>
+   884→
+   885→      {/* ===== Delete Confirmation ===== */}
+   886→      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+   887→        <AlertDialogContent>
+   888→          <AlertDialogHeader>
+   889→            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />Delete Staff Member</AlertDialogTitle>
+   890→            <AlertDialogDescription>
+   891→              Are you sure you want to delete <strong>{selectedStaff?.name}</strong>? This action cannot be undone.
+   892→              {selectedStaff && hasActiveJobs(selectedStaff) && (
+   893→                <div className="mt-3 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+   894→                  <strong>Warning:</strong> This staff member has active job assignments. Reassign or complete those jobs first.
+   895→                </div>
+   896→              )}
+   897→            </AlertDialogDescription>
+   898→          </AlertDialogHeader>
+   899→          <AlertDialogFooter>
+   900→            <AlertDialogCancel onClick={() => { setDeleteOpen(false); setSelectedStaff(null); }}>Cancel</AlertDialogCancel>
+   901→            <AlertDialogAction
+   902→              onClick={handleDelete}
+   903→              disabled={deleting || (selectedStaff ? hasActiveJobs(selectedStaff) : false)}
+   904→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   905→            >
+   906→              {deleting ? 'Deleting...' : 'Delete Staff Member'}
+   907→            </AlertDialogAction>
+   908→          </AlertDialogFooter>
+   909→        </AlertDialogContent>
+   910→      </AlertDialog>
+   911→    </>
+   912→  );
+   913→}
+   914→
+   915→// ---------------------------------------------------------------------------
+   916→// Main Dashboard Component
+   917→// ---------------------------------------------------------------------------
+   918→
+   919→export function DashboardPage() {
+   920→  const [data, setData] = useState<DashboardData | null>(null);
+   921→  const [staff, setStaff] = useState<StaffMember[]>([]);
+   922→  const [loading, setLoading] = useState(true);
+   923→  const [error, setError] = useState<string | null>(null);
+   924→
+   925→  const fetchStaff = useCallback(async () => {
+   926→    try {
+   927→      const res = await fetch('/api/staff');
+   928→      if (res.ok) {
+   929→        const staffJson: StaffMember[] = await res.json();
+   930→        setStaff(staffJson);
+   931→      }
+   932→    } catch { /* silently fail for refresh */ }
+   933→  }, []);
+   934→
+   935→  useEffect(() => {
+   936→    let cancelled = false;
+   937→    async function fetchDashboard() {
+   938→      try {
+   939→        const [dashRes, staffRes] = await Promise.all([fetch('/api/dashboard'), fetch('/api/staff')]);
+   940→        if (!dashRes.ok) throw new Error(`Failed to fetch dashboard (${dashRes.status})`);
+   941→        if (!staffRes.ok) throw new Error(`Failed to fetch staff (${staffRes.status})`);
+   942→        const dashJson: DashboardData = await dashRes.json();
+   943→        const staffJson: StaffMember[] = await staffRes.json();
+   944→        if (!cancelled) { setData(dashJson); setStaff(staffJson); setLoading(false); }
+   945→      } catch (err) {
+   946→        if (!cancelled) { setError(err instanceof Error ? err.message : 'An error occurred'); setLoading(false); }
+   947→      }
+   948→    }
+   949→    fetchDashboard();
+   950→    return () => { cancelled = true; };
+   951→  }, []);
+   952→
+   953→  if (error) {
+   954→    return <div className="flex items-center justify-center h-64 text-destructive"><p>{error}</p></div>;
+   955→  }
+   956→
+   957→  if (loading || !data) {
+   958→    return (
+   959→      <div className="space-y-6">
+   960→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+   961→          {Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)}
+   962→        </div>
+   963→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><ChartSkeleton /><ChartSkeleton /></div>
+   964→        <TableSkeleton />
+   965→        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><TableSkeleton /><TableSkeleton /></div>
+   966→      </div>
+   967→    );
+   968→  }
+   969→
+   970→  return (
+   971→    <div className="space-y-6">
+   972→      <KpiCards stats={data.stats} />
+   973→
+   974→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   975→        <RevenueChart paidInvoices={data.paidInvoices} />
+   976→        <JobsByStatusChart stats={data.stats} />
+   977→      </div>
+   978→
+   979→      <UserRolesSection staff={staff} onRefreshStaff={fetchStaff} />
+   980→
+   981→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   982→        <TechnicianPerformanceTable technicians={data.technicianStats} />
+   983→        <RecentJobsTable jobs={data.recentJobs} />
+   984→      </div>
+   985→    </div>
+   986→  );
+   987→}
+   988→

@@ -29,3 +29,25 @@ Stage Summary:
 - Non-admin sees: role cards + compact staff list grouped by role
 - Files removed: src/components/modules/user-management-page.tsx
 - Files modified: src/store/app-store.ts, src/app/page.tsx, src/components/modules/dashboard-page.tsx
+
+---
+Task ID: 3
+Agent: Super Z (Main)
+Task: Move User Roles & Staff from Dashboard into its own Navigation page
+
+Work Log:
+- Created standalone `/src/components/modules/user-roles-page.tsx` — extracted all UserRolesSection logic (role cards, staff table, CRUD dialogs, permission preview) into a full-page component with its own data fetching
+- Added `'user-roles'` to `ModulePage` type in Zustand store
+- Added `'user-roles'` to MODULE_ACCESS for ADMIN and MANAGER roles
+- Added `UserCog` nav item `{ id: 'user-roles', label: 'User Roles & Staff' }` to sidebar in page.tsx
+- Added `UserRolesPage` import and routing case in `PageRenderer`
+- Updated header title to display "User Roles & Staff" properly
+- Removed all staff-related code from dashboard-page.tsx: UserRolesSection (~450 lines), PermissionPreview, permission maps, StaffMember type, fetchStaff, unused imports (Dialog, AlertDialog, Select, Switch, Input, Label, Button, DropdownMenu, Separator, toast, 15+ lucide icons)
+- Dashboard now only fetches `/api/dashboard` (no longer fetches `/api/staff`)
+- Build passes cleanly with zero errors
+
+Stage Summary:
+- "User Roles & Staff" is now a dedicated navigation page accessible from the sidebar (visible to ADMIN and MANAGER)
+- Dashboard is now cleaner — focused on KPIs, charts, technician performance, and recent jobs
+- Files created: src/components/modules/user-roles-page.tsx
+- Files modified: src/store/app-store.ts, src/app/page.tsx, src/components/modules/dashboard-page.tsx
