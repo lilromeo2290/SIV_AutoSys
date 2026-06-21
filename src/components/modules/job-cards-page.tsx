@@ -48,6 +48,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -451,6 +452,7 @@ function JobDetailPanel({ job }: { job: JobCard }) {
 
 export function JobCardsPage() {
   const { toast } = useToast();
+  const { canCreate, canEdit, canApprove } = useAppStore();
 
   // Data state
   const [jobCards, setJobCards] = useState<JobCard[]>([]);
@@ -785,12 +787,14 @@ export function JobCardsPage() {
           </p>
         </div>
         <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreateDialog} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create Job Card
-            </Button>
-          </DialogTrigger>
+          {canCreate('job-cards') && (
+            <DialogTrigger asChild>
+              <Button onClick={openCreateDialog} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Job Card
+              </Button>
+            </DialogTrigger>
+          )}
 
           {/* ------------------------------------------------------------- */}
           {/* Create / Edit Dialog                                           */}
@@ -1139,33 +1143,39 @@ export function JobCardsPage() {
                             className="flex items-center justify-end gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openStatusDialog(job)}
-                              aria-label={`Change status of ${job.jobNumber}`}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openEditDialog(job)}
-                              aria-label={`Edit ${job.jobNumber}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(job)}
-                              aria-label={`Delete ${job.jobNumber}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canApprove('job-cards') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openStatusDialog(job)}
+                                aria-label={`Change status of ${job.jobNumber}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canEdit('job-cards') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openEditDialog(job)}
+                                aria-label={`Edit ${job.jobNumber}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canEdit('job-cards') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(job)}
+                                aria-label={`Delete ${job.jobNumber}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

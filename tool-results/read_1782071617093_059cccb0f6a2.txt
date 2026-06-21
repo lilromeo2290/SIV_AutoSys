@@ -1,0 +1,971 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback, useMemo } from 'react';
+     4→import {
+     5→  Package,
+     6→  Plus,
+     7→  Search,
+     8→  Edit,
+     9→  Trash2,
+    10→  AlertTriangle,
+    11→  DollarSign,
+    12→  Tag,
+    13→  Layers,
+    14→} from 'lucide-react';
+    15→import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+    16→import { Button } from '@/components/ui/button';
+    17→import { Input } from '@/components/ui/input';
+    18→import {
+    19→  Dialog,
+    20→  DialogContent,
+    21→  DialogHeader,
+    22→  DialogTitle,
+    23→  DialogTrigger,
+    24→  DialogFooter,
+    25→  DialogDescription,
+    26→} from '@/components/ui/dialog';
+    27→import {
+    28→  Select,
+    29→  SelectContent,
+    30→  SelectItem,
+    31→  SelectTrigger,
+    32→  SelectValue,
+    33→} from '@/components/ui/select';
+    34→import {
+    35→  Table,
+    36→  TableBody,
+    37→  TableCell,
+    38→  TableHead,
+    39→  TableHeader,
+    40→  TableRow,
+    41→} from '@/components/ui/table';
+    42→import { Badge } from '@/components/ui/badge';
+    43→import { Alert, AlertDescription } from '@/components/ui/alert';
+    44→import { Switch } from '@/components/ui/switch';
+    45→import { Label } from '@/components/ui/label';
+    46→import { Separator } from '@/components/ui/separator';
+    47→import { Skeleton } from '@/components/ui/skeleton';
+    48→import { useToast } from '@/hooks/use-toast';
+    49→
+    50→// ---------------------------------------------------------------------------
+    51→// Types
+    52→// ---------------------------------------------------------------------------
+    53→
+    54→interface Supplier {
+    55→  id: string;
+    56→  name: string;
+    57→  phone: string;
+    58→}
+    59→
+    60→interface Part {
+    61→  id: string;
+    62→  partNumber: string;
+    63→  name: string;
+    64→  category: string;
+    65→  description: string | null;
+    66→  quantity: number;
+    67→  minStock: number;
+    68→  costPrice: number;
+    69→  sellPrice: number;
+    70→  supplierId: string | null;
+    71→  location: string | null;
+    72→  supplier: Supplier | null;
+    73→  createdAt: string;
+    74→}
+    75→
+    76→interface PartFormData {
+    77→  partNumber: string;
+    78→  name: string;
+    79→  category: string;
+    80→  quantity: number;
+    81→  minStock: number;
+    82→  costPrice: number;
+    83→  sellPrice: number;
+    84→  supplierId: string;
+    85→  location: string;
+    86→}
+    87→
+    88→// ---------------------------------------------------------------------------
+    89→// Helpers
+    90→// ---------------------------------------------------------------------------
+    91→
+    92→const EMPTY_FORM: PartFormData = {
+    93→  partNumber: '',
+    94→  name: '',
+    95→  category: '',
+    96→  quantity: 0,
+    97→  minStock: 0,
+    98→  costPrice: 0,
+    99→  sellPrice: 0,
+   100→  supplierId: '',
+   101→  location: '',
+   102→};
+   103→
+   104→const KNOWN_CATEGORIES = [
+   105→  'Brakes',
+   106→  'Engine',
+   107→  'Electrical',
+   108→  'Suspension',
+   109→  'Filters',
+   110→  'Fluids',
+   111→  'Tires',
+   112→  'Body',
+   113→  'Transmission',
+   114→  'Exhaust',
+   115→  'Cooling',
+   116→  'Steering',
+   117→  'Lighting',
+   118→  'Accessories',
+   119→  'Hardware',
+   120→];
+   121→
+   122→function formatCurrency(value: number): string {
+   123→  return new Intl.NumberFormat('en-US', {
+   124→    style: 'currency',
+   125→    currency: 'USD',
+   126→    minimumFractionDigits: 2,
+   127→    maximumFractionDigits: 2,
+   128→  }).format(value);
+   129→}
+   130→
+   131→function isLowStock(part: Part): boolean {
+   132→  return part.quantity <= part.minStock;
+   133→}
+   134→
+   135→// ---------------------------------------------------------------------------
+   136→// Sub-components
+   137→// ---------------------------------------------------------------------------
+   138→
+   139→function StatsSkeleton() {
+   140→  return (
+   141→    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   142→      {Array.from({ length: 4 }).map((_, i) => (
+   143→        <Card key={i}>
+   144→          <CardHeader className="pb-2">
+   145→            <Skeleton className="h-4 w-24" />
+   146→          </CardHeader>
+   147→          <CardContent>
+   148→            <Skeleton className="h-8 w-16" />
+   149→          </CardContent>
+   150→        </Card>
+   151→      ))}
+   152→    </div>
+   153→  );
+   154→}
+   155→
+   156→function TableSkeleton() {
+   157→  return (
+   158→    <Card>
+   159→      <CardContent className="p-4">
+   160→        <div className="space-y-3">
+   161→          <Skeleton className="h-10 w-full" />
+   162→          {Array.from({ length: 6 }).map((_, i) => (
+   163→            <Skeleton key={i} className="h-14 w-full" />
+   164→          ))}
+   165→        </div>
+   166→      </CardContent>
+   167→    </Card>
+   168→  );
+   169→}
+   170→
+   171→function LowStockSkeleton() {
+   172→  return (
+   173→    <div className="space-y-3">
+   174→      <Skeleton className="h-6 w-48" />
+   175→      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   176→        {Array.from({ length: 3 }).map((_, i) => (
+   177→          <Skeleton key={i} className="h-28 w-full" />
+   178→        ))}
+   179→      </div>
+   180→    </div>
+   181→  );
+   182→}
+   183→
+   184→// ---------------------------------------------------------------------------
+   185→// Main Component
+   186→// ---------------------------------------------------------------------------
+   187→
+   188→export function InventoryPage() {
+   189→  const { toast } = useToast();
+   190→
+   191→  // Data state
+   192→  const [parts, setParts] = useState<Part[]>([]);
+   193→  const [loading, setLoading] = useState(true);
+   194→
+   195→  // UI state
+   196→  const [searchQuery, setSearchQuery] = useState('');
+   197→  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+   198→  const [lowStockOnly, setLowStockOnly] = useState(false);
+   199→
+   200→  // Dialog state
+   201→  const [dialogOpen, setDialogOpen] = useState(false);
+   202→  const [editingPart, setEditingPart] = useState<Part | null>(null);
+   203→  const [formData, setFormData] = useState<PartFormData>(EMPTY_FORM);
+   204→  const [submitting, setSubmitting] = useState(false);
+   205→
+   206→  // -------------------------------------------------------------------------
+   207→  // Data fetching
+   208→  // -------------------------------------------------------------------------
+   209→
+   210→  const fetchParts = useCallback(async () => {
+   211→    try {
+   212→      const res = await fetch('/api/inventory');
+   213→      if (!res.ok) throw new Error(`Failed to fetch inventory (${res.status})`);
+   214→      const data: Part[] = await res.json();
+   215→      setParts(data);
+   216→    } catch (err) {
+   217→      toast({
+   218→        title: 'Error',
+   219→        description: err instanceof Error ? err.message : 'Failed to load inventory',
+   220→        variant: 'destructive',
+   221→      });
+   222→    } finally {
+   223→      setLoading(false);
+   224→    }
+   225→  }, [toast]);
+   226→
+   227→  useEffect(() => {
+   228→    fetchParts();
+   229→  }, [fetchParts]);
+   230→
+   231→  // -------------------------------------------------------------------------
+   232→  // Derived data
+   233→  // -------------------------------------------------------------------------
+   234→
+   235→  const uniqueCategories = useMemo(() => {
+   236→    const dataCategories = [...new Set(parts.map((p) => p.category))];
+   237→    // Merge known categories with those from data, maintaining order
+   238→    const merged = [...new Set([...dataCategories, ...KNOWN_CATEGORIES])];
+   239→    return merged.sort();
+   240→  }, [parts]);
+   241→
+   242→  const uniqueSuppliers = useMemo(() => {
+   243→    const supplierMap = new Map<string, Supplier>();
+   244→    parts.forEach((p) => {
+   245→      if (p.supplier) {
+   246→        supplierMap.set(p.supplier.id, p.supplier);
+   247→      }
+   248→    });
+   249→    return Array.from(supplierMap.values());
+   250→  }, [parts]);
+   251→
+   252→  const stats = useMemo(() => {
+   253→    const totalParts = parts.length;
+   254→    const totalCategories = new Set(parts.map((p) => p.category)).size;
+   255→    const lowStockCount = parts.filter(isLowStock).length;
+   256→    const totalValue = parts.reduce(
+   257→      (sum, p) => sum + p.quantity * p.costPrice,
+   258→      0
+   259→    );
+   260→    return { totalParts, totalCategories, lowStockCount, totalValue };
+   261→  }, [parts]);
+   262→
+   263→  const lowStockParts = useMemo(() => {
+   264→    return parts.filter(isLowStock);
+   265→  }, [parts]);
+   266→
+   267→  const filteredParts = useMemo(() => {
+   268→    return parts.filter((part) => {
+   269→      // Search filter
+   270→      if (searchQuery.trim()) {
+   271→        const q = searchQuery.toLowerCase();
+   272→        const matchesSearch =
+   273→          part.partNumber.toLowerCase().includes(q) ||
+   274→          part.name.toLowerCase().includes(q) ||
+   275→          part.category.toLowerCase().includes(q);
+   276→        if (!matchesSearch) return false;
+   277→      }
+   278→
+   279→      // Category filter
+   280→      if (categoryFilter !== 'all' && part.category !== categoryFilter) {
+   281→        return false;
+   282→      }
+   283→
+   284→      // Low stock filter
+   285→      if (lowStockOnly && !isLowStock(part)) {
+   286→        return false;
+   287→      }
+   288→
+   289→      return true;
+   290→    });
+   291→  }, [parts, searchQuery, categoryFilter, lowStockOnly]);
+   292→
+   293→  // -------------------------------------------------------------------------
+   294→  // CRUD handlers
+   295→  // -------------------------------------------------------------------------
+   296→
+   297→  function openCreateDialog() {
+   298→    setEditingPart(null);
+   299→    setFormData(EMPTY_FORM);
+   300→    setDialogOpen(true);
+   301→  }
+   302→
+   303→  function openEditDialog(part: Part) {
+   304→    setEditingPart(part);
+   305→    setFormData({
+   306→      partNumber: part.partNumber,
+   307→      name: part.name,
+   308→      category: part.category,
+   309→      quantity: part.quantity,
+   310→      minStock: part.minStock,
+   311→      costPrice: part.costPrice,
+   312→      sellPrice: part.sellPrice,
+   313→      supplierId: part.supplierId ?? '',
+   314→      location: part.location ?? '',
+   315→    });
+   316→    setDialogOpen(true);
+   317→  }
+   318→
+   319→  async function handleSubmit(e: React.FormEvent) {
+   320→    e.preventDefault();
+   321→
+   322→    if (!formData.partNumber.trim() || !formData.name.trim() || !formData.category.trim()) {
+   323→      toast({
+   324→        title: 'Validation Error',
+   325→        description: 'Part Number, Name, and Category are required fields.',
+   326→        variant: 'destructive',
+   327→      });
+   328→      return;
+   329→    }
+   330→
+   331→    if (formData.costPrice < 0 || formData.sellPrice < 0) {
+   332→      toast({
+   333→        title: 'Validation Error',
+   334→        description: 'Cost Price and Sell Price must be non-negative.',
+   335→        variant: 'destructive',
+   336→      });
+   337→      return;
+   338→    }
+   339→
+   340→    if (formData.quantity < 0 || formData.minStock < 0) {
+   341→      toast({
+   342→        title: 'Validation Error',
+   343→        description: 'Quantity and Min Stock must be non-negative.',
+   344→        variant: 'destructive',
+   345→      });
+   346→      return;
+   347→    }
+   348→
+   349→    setSubmitting(true);
+   350→    try {
+   351→      const isEdit = editingPart !== null;
+   352→      const url = '/api/inventory';
+   353→      const payload = {
+   354→        partNumber: formData.partNumber.trim(),
+   355→        name: formData.name.trim(),
+   356→        category: formData.category.trim(),
+   357→        quantity: formData.quantity,
+   358→        minStock: formData.minStock,
+   359→        costPrice: formData.costPrice,
+   360→        sellPrice: formData.sellPrice,
+   361→        supplierId: formData.supplierId.trim() || undefined,
+   362→        location: formData.location.trim() || undefined,
+   363→      };
+   364→
+   365→      const res = await fetch(url, {
+   366→        method: isEdit ? 'PUT' : 'POST',
+   367→        headers: { 'Content-Type': 'application/json' },
+   368→        body: JSON.stringify(isEdit ? { ...payload, id: editingPart.id } : payload),
+   369→      });
+   370→
+   371→      if (!res.ok) {
+   372→        const errData = await res.json().catch(() => null);
+   373→        throw new Error(errData?.error || `Failed to ${isEdit ? 'update' : 'create'} part`);
+   374→      }
+   375→
+   376→      toast({
+   377→        title: isEdit ? 'Part Updated' : 'Part Added',
+   378→        description: `${formData.name.trim()} (${formData.partNumber.trim()}) has been ${isEdit ? 'updated' : 'added'} successfully.`,
+   379→      });
+   380→
+   381→      setDialogOpen(false);
+   382→      await fetchParts();
+   383→    } catch (err) {
+   384→      toast({
+   385→        title: 'Error',
+   386→        description: err instanceof Error ? err.message : `Failed to ${editingPart ? 'update' : 'create'} part`,
+   387→        variant: 'destructive',
+   388→      });
+   389→    } finally {
+   390→      setSubmitting(false);
+   391→    }
+   392→  }
+   393→
+   394→  async function handleDelete(part: Part) {
+   395→    if (!confirm(`Are you sure you want to delete "${part.name}" (${part.partNumber})? This action cannot be undone.`)) {
+   396→      return;
+   397→    }
+   398→
+   399→    try {
+   400→      const res = await fetch(`/api/inventory?id=${part.id}`, { method: 'DELETE' });
+   401→      if (!res.ok) throw new Error(`Failed to delete part (${res.status})`);
+   402→
+   403→      toast({
+   404→        title: 'Part Deleted',
+   405→        description: `${part.name} (${part.partNumber}) has been removed from inventory.`,
+   406→      });
+   407→
+   408→      await fetchParts();
+   409→    } catch (err) {
+   410→      toast({
+   411→        title: 'Error',
+   412→        description: err instanceof Error ? err.message : 'Failed to delete part',
+   413→        variant: 'destructive',
+   414→      });
+   415→    }
+   416→  }
+   417→
+   418→  function updateFormField(field: keyof PartFormData, value: string | number) {
+   419→    setFormData((prev) => ({ ...prev, [field]: value }));
+   420→  }
+   421→
+   422→  // -------------------------------------------------------------------------
+   423→  // Render – Loading
+   424→  // -------------------------------------------------------------------------
+   425→
+   426→  if (loading) {
+   427→    return (
+   428→      <div className="space-y-6">
+   429→        {/* Header skeleton */}
+   430→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   431→          <div className="space-y-2">
+   432→            <Skeleton className="h-7 w-52" />
+   433→            <Skeleton className="h-4 w-80" />
+   434→          </div>
+   435→          <Skeleton className="h-10 w-32" />
+   436→        </div>
+   437→        {/* Stats skeleton */}
+   438→        <StatsSkeleton />
+   439→        {/* Search/filter skeleton */}
+   440→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+   441→          <Skeleton className="h-10 w-full max-w-sm" />
+   442→          <Skeleton className="h-10 w-44" />
+   443→        </div>
+   444→        {/* Table skeleton */}
+   445→        <TableSkeleton />
+   446→        {/* Low stock skeleton */}
+   447→        <LowStockSkeleton />
+   448→      </div>
+   449→    );
+   450→  }
+   451→
+   452→  // -------------------------------------------------------------------------
+   453→  // Render
+   454→  // -------------------------------------------------------------------------
+   455→
+   456→  return (
+   457→    <div className="space-y-6">
+   458→      {/* Header */}
+   459→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   460→        <div>
+   461→          <h1 className="text-2xl font-bold tracking-tight">Inventory Management</h1>
+   462→          <p className="text-muted-foreground text-sm mt-1">
+   463→            Track parts, monitor stock levels, and manage suppliers for your workshop.
+   464→          </p>
+   465→        </div>
+   466→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   467→          <DialogTrigger asChild>
+   468→            <Button onClick={openCreateDialog} className="gap-2">
+   469→              <Plus className="h-4 w-4" />
+   470→              Add Part
+   471→            </Button>
+   472→          </DialogTrigger>
+   473→
+   474→          {/* Add/Edit Dialog */}
+   475→          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   476→            <form onSubmit={handleSubmit}>
+   477→              <DialogHeader>
+   478→                <DialogTitle>
+   479→                  {editingPart ? 'Edit Part' : 'Add New Part'}
+   480→                </DialogTitle>
+   481→                <DialogDescription>
+   482→                  {editingPart
+   483→                    ? 'Update the part details below.'
+   484→                    : 'Fill in the details to add a new part to inventory.'}
+   485→                </DialogDescription>
+   486→              </DialogHeader>
+   487→              <Separator className="my-2" />
+   488→              <div className="grid gap-4 py-2">
+   489→                {/* Row 1: Part Number + Name */}
+   490→                <div className="grid gap-4 sm:grid-cols-2">
+   491→                  <div className="grid gap-2">
+   492→                    <Label htmlFor="part-number">
+   493→                      Part Number <span className="text-destructive">*</span>
+   494→                    </Label>
+   495→                    <Input
+   496→                      id="part-number"
+   497→                      placeholder="e.g. BRK-001"
+   498→                      value={formData.partNumber}
+   499→                      onChange={(e) => updateFormField('partNumber', e.target.value)}
+   500→                      required
+   501→                      disabled={submitting}
+   502→                    />
+   503→                  </div>
+   504→                  <div className="grid gap-2">
+   505→                    <Label htmlFor="part-name">
+   506→                      Name <span className="text-destructive">*</span>
+   507→                    </Label>
+   508→                    <Input
+   509→                      id="part-name"
+   510→                      placeholder="e.g. Front Brake Pad Set"
+   511→                      value={formData.name}
+   512→                      onChange={(e) => updateFormField('name', e.target.value)}
+   513→                      required
+   514→                      disabled={submitting}
+   515→                    />
+   516→                  </div>
+   517→                </div>
+   518→
+   519→                {/* Category */}
+   520→                <div className="grid gap-2">
+   521→                  <Label htmlFor="part-category">
+   522→                    Category <span className="text-destructive">*</span>
+   523→                  </Label>
+   524→                  <Select
+   525→                    value={formData.category}
+   526→                    onValueChange={(val) => updateFormField('category', val)}
+   527→                    disabled={submitting}
+   528→                  >
+   529→                    <SelectTrigger id="part-category" className="w-full">
+   530→                      <SelectValue placeholder="Select a category" />
+   531→                    </SelectTrigger>
+   532→                    <SelectContent>
+   533→                      {uniqueCategories.map((cat) => (
+   534→                        <SelectItem key={cat} value={cat}>
+   535→                          {cat}
+   536→                        </SelectItem>
+   537→                      ))}
+   538→                    </SelectContent>
+   539→                  </Select>
+   540→                </div>
+   541→
+   542→                {/* Row 2: Quantity + Min Stock */}
+   543→                <div className="grid gap-4 sm:grid-cols-2">
+   544→                  <div className="grid gap-2">
+   545→                    <Label htmlFor="part-quantity">Quantity</Label>
+   546→                    <Input
+   547→                      id="part-quantity"
+   548→                      type="number"
+   549→                      min="0"
+   550→                      placeholder="0"
+   551→                      value={formData.quantity}
+   552→                      onChange={(e) => updateFormField('quantity', parseInt(e.target.value) || 0)}
+   553→                      disabled={submitting}
+   554→                    />
+   555→                  </div>
+   556→                  <div className="grid gap-2">
+   557→                    <Label htmlFor="part-minstock">Min Stock Level</Label>
+   558→                    <Input
+   559→                      id="part-minstock"
+   560→                      type="number"
+   561→                      min="0"
+   562→                      placeholder="0"
+   563→                      value={formData.minStock}
+   564→                      onChange={(e) => updateFormField('minStock', parseInt(e.target.value) || 0)}
+   565→                      disabled={submitting}
+   566→                    />
+   567→                  </div>
+   568→                </div>
+   569→
+   570→                {/* Row 3: Cost Price + Sell Price */}
+   571→                <div className="grid gap-4 sm:grid-cols-2">
+   572→                  <div className="grid gap-2">
+   573→                    <Label htmlFor="part-cost">
+   574→                      Cost Price <span className="text-destructive">*</span>
+   575→                    </Label>
+   576→                    <div className="relative">
+   577→                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+   578→                      <Input
+   579→                        id="part-cost"
+   580→                        type="number"
+   581→                        min="0"
+   582→                        step="0.01"
+   583→                        placeholder="0.00"
+   584→                        value={formData.costPrice}
+   585→                        onChange={(e) => updateFormField('costPrice', parseFloat(e.target.value) || 0)}
+   586→                        className="pl-9"
+   587→                        required
+   588→                        disabled={submitting}
+   589→                      />
+   590→                    </div>
+   591→                  </div>
+   592→                  <div className="grid gap-2">
+   593→                    <Label htmlFor="part-sell">
+   594→                      Sell Price <span className="text-destructive">*</span>
+   595→                    </Label>
+   596→                    <div className="relative">
+   597→                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+   598→                      <Input
+   599→                        id="part-sell"
+   600→                        type="number"
+   601→                        min="0"
+   602→                        step="0.01"
+   603→                        placeholder="0.00"
+   604→                        value={formData.sellPrice}
+   605→                        onChange={(e) => updateFormField('sellPrice', parseFloat(e.target.value) || 0)}
+   606→                        className="pl-9"
+   607→                        required
+   608→                        disabled={submitting}
+   609→                      />
+   610→                    </div>
+   611→                  </div>
+   612→                </div>
+   613→
+   614→                {/* Supplier */}
+   615→                <div className="grid gap-2">
+   616→                  <Label htmlFor="part-supplier">Supplier</Label>
+   617→                  <Select
+   618→                    value={formData.supplierId}
+   619→                    onValueChange={(val) => updateFormField('supplierId', val)}
+   620→                    disabled={submitting}
+   621→                  >
+   622→                    <SelectTrigger id="part-supplier" className="w-full">
+   623→                      <SelectValue placeholder="Select a supplier (optional)" />
+   624→                    </SelectTrigger>
+   625→                    <SelectContent>
+   626→                      {uniqueSuppliers.map((supplier) => (
+   627→                        <SelectItem key={supplier.id} value={supplier.id}>
+   628→                          {supplier.name}
+   629→                        </SelectItem>
+   630→                      ))}
+   631→                    </SelectContent>
+   632→                  </Select>
+   633→                </div>
+   634→
+   635→                {/* Location */}
+   636→                <div className="grid gap-2">
+   637→                  <Label htmlFor="part-location">Location</Label>
+   638→                  <Input
+   639→                    id="part-location"
+   640→                    placeholder="e.g. Shelf A-3, Bin 12"
+   641→                    value={formData.location}
+   642→                    onChange={(e) => updateFormField('location', e.target.value)}
+   643→                    disabled={submitting}
+   644→                  />
+   645→                </div>
+   646→              </div>
+   647→              <DialogFooter className="pt-2">
+   648→                <Button
+   649→                  type="button"
+   650→                  variant="outline"
+   651→                  onClick={() => setDialogOpen(false)}
+   652→                  disabled={submitting}
+   653→                >
+   654→                  Cancel
+   655→                </Button>
+   656→                <Button type="submit" disabled={submitting}>
+   657→                  {submitting
+   658→                    ? 'Saving...'
+   659→                    : editingPart
+   660→                      ? 'Update Part'
+   661→                      : 'Add Part'}
+   662→                </Button>
+   663→              </DialogFooter>
+   664→            </form>
+   665→          </DialogContent>
+   666→        </Dialog>
+   667→      </div>
+   668→
+   669→      {/* Stats Cards */}
+   670→      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   671→        <Card>
+   672→          <CardHeader className="pb-2">
+   673→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   674→              Total Parts
+   675→            </CardTitle>
+   676→          </CardHeader>
+   677→          <CardContent>
+   678→            <div className="flex items-center gap-2">
+   679→              <Package className="h-5 w-5 text-muted-foreground" />
+   680→              <span className="text-2xl font-bold tabular-nums">{stats.totalParts}</span>
+   681→            </div>
+   682→          </CardContent>
+   683→        </Card>
+   684→        <Card>
+   685→          <CardHeader className="pb-2">
+   686→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   687→              Total Categories
+   688→            </CardTitle>
+   689→          </CardHeader>
+   690→          <CardContent>
+   691→            <div className="flex items-center gap-2">
+   692→              <Tag className="h-5 w-5 text-muted-foreground" />
+   693→              <span className="text-2xl font-bold tabular-nums">{stats.totalCategories}</span>
+   694→            </div>
+   695→          </CardContent>
+   696→        </Card>
+   697→        <Card>
+   698→          <CardHeader className="pb-2">
+   699→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   700→              Low Stock Alerts
+   701→            </CardTitle>
+   702→          </CardHeader>
+   703→          <CardContent>
+   704→            <div className="flex items-center gap-2">
+   705→              <AlertTriangle
+   706→                className={`h-5 w-5 ${stats.lowStockCount > 0 ? 'text-destructive' : 'text-muted-foreground'}`}
+   707→              />
+   708→              <span
+   709→                className={`text-2xl font-bold tabular-nums ${stats.lowStockCount > 0 ? 'text-destructive' : ''}`}
+   710→              >
+   711→                {stats.lowStockCount}
+   712→              </span>
+   713→            </div>
+   714→          </CardContent>
+   715→        </Card>
+   716→        <Card>
+   717→          <CardHeader className="pb-2">
+   718→            <CardTitle className="text-sm font-medium text-muted-foreground">
+   719→              Total Inventory Value
+   720→            </CardTitle>
+   721→          </CardHeader>
+   722→          <CardContent>
+   723→            <div className="flex items-center gap-2">
+   724→              <Layers className="h-5 w-5 text-muted-foreground" />
+   725→              <span className="text-2xl font-bold tabular-nums">
+   726→                {formatCurrency(stats.totalValue)}
+   727→              </span>
+   728→            </div>
+   729→          </CardContent>
+   730→        </Card>
+   731→      </div>
+   732→
+   733→      {/* Search / Filter bar */}
+   734→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+   735→        <div className="relative flex-1 max-w-sm">
+   736→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+   737→          <Input
+   738→            placeholder="Search by part #, name, or category..."
+   739→            value={searchQuery}
+   740→            onChange={(e) => setSearchQuery(e.target.value)}
+   741→            className="pl-9"
+   742→          />
+   743→        </div>
+   744→        <div className="flex items-center gap-3">
+   745→          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   746→            <SelectTrigger className="w-[180px]">
+   747→              <SelectValue placeholder="All Categories" />
+   748→            </SelectTrigger>
+   749→            <SelectContent>
+   750→              <SelectItem value="all">All Categories</SelectItem>
+   751→              {uniqueCategories.map((cat) => (
+   752→                <SelectItem key={cat} value={cat}>
+   753→                  {cat}
+   754→                </SelectItem>
+   755→              ))}
+   756→            </SelectContent>
+   757→          </Select>
+   758→          <div className="flex items-center gap-2">
+   759→            <Switch
+   760→              id="low-stock-toggle"
+   761→              checked={lowStockOnly}
+   762→              onCheckedChange={setLowStockOnly}
+   763→            />
+   764→            <Label htmlFor="low-stock-toggle" className="text-sm whitespace-nowrap cursor-pointer">
+   765→              Low Stock Only
+   766→            </Label>
+   767→          </div>
+   768→        </div>
+   769→      </div>
+   770→
+   771→      {/* Parts Table */}
+   772→      <Card>
+   773→        <CardContent className="p-0">
+   774→          <div className="max-h-[500px] overflow-y-auto">
+   775→            <Table>
+   776→              <TableHeader>
+   777→                <TableRow>
+   778→                  <TableHead className="min-w-[100px]">Part #</TableHead>
+   779→                  <TableHead className="min-w-[160px]">Name</TableHead>
+   780→                  <TableHead className="min-w-[100px] hidden md:table-cell">
+   781→                    <div className="flex items-center gap-1.5">
+   782→                      <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+   783→                      Category
+   784→                    </div>
+   785→                  </TableHead>
+   786→                  <TableHead className="text-center min-w-[80px]">In Stock</TableHead>
+   787→                  <TableHead className="text-center min-w-[80px] hidden sm:table-cell">Min Stock</TableHead>
+   788→                  <TableHead className="text-right min-w-[100px] hidden lg:table-cell">Cost Price</TableHead>
+   789→                  <TableHead className="text-right min-w-[100px] hidden lg:table-cell">Sell Price</TableHead>
+   790→                  <TableHead className="min-w-[120px] hidden xl:table-cell">Supplier</TableHead>
+   791→                  <TableHead className="text-right min-w-[100px]">Actions</TableHead>
+   792→                </TableRow>
+   793→              </TableHeader>
+   794→              <TableBody>
+   795→                {filteredParts.length === 0 ? (
+   796→                  <TableRow>
+   797→                    <TableCell colSpan={9} className="h-32 text-center">
+   798→                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+   799→                        <Package className="h-8 w-8 opacity-40" />
+   800→                        <p className="text-sm font-medium">
+   801→                          {searchQuery.trim() || categoryFilter !== 'all' || lowStockOnly
+   802→                            ? 'No parts match your filters.'
+   803→                            : 'No parts in inventory.'}
+   804→                        </p>
+   805→                        {!searchQuery.trim() && categoryFilter === 'all' && !lowStockOnly && (
+   806→                          <p className="text-xs">
+   807→                            Click &quot;Add Part&quot; to get started.
+   808→                          </p>
+   809→                        )}
+   810→                      </div>
+   811→                    </TableCell>
+   812→                  </TableRow>
+   813→                ) : (
+   814→                  filteredParts.map((part) => {
+   815→                    const low = isLowStock(part);
+   816→                    return (
+   817→                      <TableRow key={part.id} className={low ? 'bg-destructive/5' : undefined}>
+   818→                        <TableCell className="font-mono text-sm font-medium">
+   819→                          {part.partNumber}
+   820→                        </TableCell>
+   821→                        <TableCell className="font-medium">
+   822→                          <div className="flex flex-col">
+   823→                            <span>{part.name}</span>
+   824→                            {part.location && (
+   825→                              <span className="text-xs text-muted-foreground md:hidden">
+   826→                                {part.location}
+   827→                              </span>
+   828→                            )}
+   829→                          </div>
+   830→                        </TableCell>
+   831→                        <TableCell className="hidden md:table-cell">
+   832→                          <Badge variant="secondary" className="font-normal">
+   833→                            {part.category}
+   834→                          </Badge>
+   835→                        </TableCell>
+   836→                        <TableCell className="text-center">
+   837→                          <span
+   838→                            className={`inline-flex items-center justify-center tabular-nums font-semibold text-sm px-2 py-0.5 rounded ${
+   839→                              low
+   840→                                ? 'bg-destructive/15 text-destructive'
+   841→                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+   842→                            }`}
+   843→                          >
+   844→                            {low && <AlertTriangle className="h-3 w-3 mr-1" />}
+   845→                            {part.quantity}
+   846→                          </span>
+   847→                        </TableCell>
+   848→                        <TableCell className="text-center tabular-nums hidden sm:table-cell">
+   849→                          {part.minStock}
+   850→                        </TableCell>
+   851→                        <TableCell className="text-right tabular-nums hidden lg:table-cell">
+   852→                          {formatCurrency(part.costPrice)}
+   853→                        </TableCell>
+   854→                        <TableCell className="text-right tabular-nums hidden lg:table-cell">
+   855→                          {formatCurrency(part.sellPrice)}
+   856→                        </TableCell>
+   857→                        <TableCell className="hidden xl:table-cell text-muted-foreground text-sm">
+   858→                          {part.supplier?.name || '—'}
+   859→                        </TableCell>
+   860→                        <TableCell className="text-right">
+   861→                          <div className="flex items-center justify-end gap-1">
+   862→                            <Button
+   863→                              variant="ghost"
+   864→                              size="icon"
+   865→                              className="h-8 w-8"
+   866→                              onClick={() => openEditDialog(part)}
+   867→                              aria-label={`Edit ${part.name}`}
+   868→                            >
+   869→                              <Edit className="h-4 w-4" />
+   870→                            </Button>
+   871→                            <Button
+   872→                              variant="ghost"
+   873→                              size="icon"
+   874→                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+   875→                              onClick={() => handleDelete(part)}
+   876→                              aria-label={`Delete ${part.name}`}
+   877→                            >
+   878→                              <Trash2 className="h-4 w-4" />
+   879→                            </Button>
+   880→                          </div>
+   881→                        </TableCell>
+   882→                      </TableRow>
+   883→                    );
+   884→                  })
+   885→                )}
+   886→              </TableBody>
+   887→            </Table>
+   888→          </div>
+   889→        </CardContent>
+   890→      </Card>
+   891→
+   892→      {/* Low Stock Alert Section */}
+   893→      {lowStockParts.length > 0 && (
+   894→        <section className="space-y-3">
+   895→          <div className="flex items-center gap-2">
+   896→            <AlertTriangle className="h-5 w-5 text-destructive" />
+   897→            <h2 className="text-lg font-semibold">Low Stock Alerts</h2>
+   898→            <Badge variant="destructive" className="tabular-nums">
+   899→              {lowStockParts.length}
+   900→            </Badge>
+   901→          </div>
+   902→          <p className="text-sm text-muted-foreground">
+   903→            The following parts are at or below their minimum stock level and need to be reordered.
+   904→          </p>
+   905→          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   906→            {lowStockParts.map((part) => (
+   907→              <Card
+   908→                key={part.id}
+   909→                className="border-destructive/30 bg-destructive/5"
+   910→              >
+   911→                <CardContent className="p-4">
+   912→                  <div className="flex items-start justify-between gap-2">
+   913→                    <div className="space-y-1 min-w-0">
+   914→                      <div className="flex items-center gap-2">
+   915→                        <span className="font-mono text-xs text-muted-foreground">
+   916→                          {part.partNumber}
+   917→                        </span>
+   918→                        <Badge variant="secondary" className="text-xs font-normal">
+   919→                          {part.category}
+   920→                        </Badge>
+   921→                      </div>
+   922→                      <p className="font-semibold text-sm truncate">{part.name}</p>
+   923→                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   924→                        <span className="flex items-center gap-1">
+   925→                          <Package className="h-3 w-3" />
+   926→                          In Stock: <span className="font-bold text-destructive tabular-nums">{part.quantity}</span>
+   927→                        </span>
+   928→                        <span className="flex items-center gap-1">
+   929→                          <AlertTriangle className="h-3 w-3" />
+   930→                          Min: <span className="tabular-nums">{part.minStock}</span>
+   931→                        </span>
+   932→                      </div>
+   933→                      {part.supplier && (
+   934→                        <p className="text-xs text-muted-foreground">
+   935→                          Supplier: {part.supplier.name}
+   936→                        </p>
+   937→                      )}
+   938→                    </div>
+   939→                    <div className="flex gap-1 shrink-0">
+   940→                      <Button
+   941→                        variant="outline"
+   942→                        size="icon"
+   943→                        className="h-7 w-7"
+   944→                        onClick={() => openEditDialog(part)}
+   945→                        aria-label={`Reorder ${part.name}`}
+   946→                      >
+   947→                        <Edit className="h-3.5 w-3.5" />
+   948→                      </Button>
+   949→                    </div>
+   950→                  </div>
+   951→                </CardContent>
+   952→              </Card>
+   953→            ))}
+   954→          </div>
+   955→        </section>
+   956→      )}
+   957→
+   958→      {/* Global low stock alert banner */}
+   959→      {lowStockParts.length > 0 && (
+   960→        <Alert variant="destructive">
+   961→          <AlertTriangle className="h-4 w-4" />
+   962→          <AlertDescription>
+   963→            <strong>{lowStockParts.length} part{lowStockParts.length > 1 ? 's' : ''}</strong> are at or below minimum stock levels.
+   964→            Please review the alerts above and reorder as needed.
+   965→          </AlertDescription>
+   966→        </Alert>
+   967→      )}
+   968→    </div>
+   969→  );
+   970→}
+   971→

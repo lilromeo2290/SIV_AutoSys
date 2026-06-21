@@ -38,6 +38,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -166,6 +167,7 @@ function VehicleSubTable({ vehicles }: { vehicles: Vehicle[] }) {
 
 export function CustomersPage() {
   const { toast } = useToast();
+  const { canCreate, canEdit } = useAppStore();
 
   // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -371,12 +373,14 @@ export function CustomersPage() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreateDialog} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add Customer
-            </Button>
-          </DialogTrigger>
+          {canCreate('customers') && (
+            <DialogTrigger asChild>
+              <Button onClick={openCreateDialog} className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Add Customer
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="sm:max-w-md">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -601,24 +605,28 @@ export function CustomersPage() {
                             className="flex items-center justify-end gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openEditDialog(customer)}
-                              aria-label={`Edit ${customer.name}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(customer)}
-                              aria-label={`Delete ${customer.name}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canEdit('customers') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openEditDialog(customer)}
+                                aria-label={`Edit ${customer.name}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canEdit('customers') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(customer)}
+                                aria-label={`Delete ${customer.name}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

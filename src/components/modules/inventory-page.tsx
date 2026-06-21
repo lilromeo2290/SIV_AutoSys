@@ -46,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,6 +188,7 @@ function LowStockSkeleton() {
 
 export function InventoryPage() {
   const { toast } = useToast();
+  const { canCreate, canEdit } = useAppStore();
 
   // Data state
   const [parts, setParts] = useState<Part[]>([]);
@@ -463,6 +465,7 @@ export function InventoryPage() {
             Track parts, monitor stock levels, and manage suppliers for your workshop.
           </p>
         </div>
+        {canCreate('inventory') && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openCreateDialog} className="gap-2">
@@ -664,6 +667,7 @@ export function InventoryPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -859,6 +863,7 @@ export function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {canEdit('inventory') && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -868,6 +873,8 @@ export function InventoryPage() {
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            )}
+                            {canEdit('inventory') && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -877,6 +884,7 @@ export function InventoryPage() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -937,6 +945,7 @@ export function InventoryPage() {
                       )}
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      {canEdit('inventory') && (
                       <Button
                         variant="outline"
                         size="icon"
@@ -946,6 +955,7 @@ export function InventoryPage() {
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>

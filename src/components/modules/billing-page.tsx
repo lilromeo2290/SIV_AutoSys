@@ -51,6 +51,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,6 +160,7 @@ function createEmptyLineItem(): LineItemForm {
 
 export function BillingPage() {
   const { toast } = useToast();
+  const { canCreate } = useAppStore();
 
   // --- Data state ---
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -504,10 +506,12 @@ export function BillingPage() {
             revenue.
           </p>
         </div>
+        {canCreate('billing') && (
         <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Create Invoice
         </Button>
+        )}
       </div>
 
       {/* ------------------------------------------------------------------- */}
@@ -976,6 +980,7 @@ function InvoiceRow({
   onStatusChange,
   onDelete,
 }: InvoiceRowProps) {
+  const { canEdit, canApprove } = useAppStore();
   return (
     <>
       <TableRow className={isExpanded ? 'bg-muted/40' : ''}>
@@ -1033,6 +1038,7 @@ function InvoiceRow({
         <TableCell className="text-right">
           <div className="flex items-center justify-end gap-1">
             {/* Quick status change */}
+            {canApprove('billing') && (
             <Select
               value={inv.status}
               onValueChange={(val) => onStatusChange(inv.id, val)}
@@ -1049,6 +1055,7 @@ function InvoiceRow({
                 <SelectItem value="CANCELLED">Cancelled</SelectItem>
               </SelectContent>
             </Select>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -1058,6 +1065,7 @@ function InvoiceRow({
             >
               <Eye className="h-4 w-4" />
             </Button>
+            {canEdit('billing') && (
             <Button
               variant="ghost"
               size="icon"
@@ -1067,6 +1075,7 @@ function InvoiceRow({
             >
               <Trash2 className="h-4 w-4" />
             </Button>
+            )}
           </div>
         </TableCell>
       </TableRow>

@@ -1,0 +1,1153 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback } from 'react';
+     4→import {
+     5→  Bell,
+     6→  Plus,
+     7→  Search,
+     8→  Edit,
+     9→  Trash2,
+    10→  CheckCircle2,
+    11→  MessageSquare,
+    12→  Phone,
+    13→  Mail,
+    14→  Clock,
+    15→  User,
+    16→  Car,
+    17→  CalendarDays,
+    18→  AlertTriangle,
+    19→  Send,
+    20→} from 'lucide-react';
+    21→import {
+    22→  Card,
+    23→  CardHeader,
+    24→  CardTitle,
+    25→  CardDescription,
+    26→  CardAction,
+    27→  CardContent,
+    28→} from '@/components/ui/card';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import {
+    32→  Dialog,
+    33→  DialogContent,
+    34→  DialogHeader,
+    35→  DialogTitle,
+    36→  DialogFooter,
+    37→  DialogDescription,
+    38→} from '@/components/ui/dialog';
+    39→import {
+    40→  Select,
+    41→  SelectContent,
+    42→  SelectItem,
+    43→  SelectTrigger,
+    44→  SelectValue,
+    45→} from '@/components/ui/select';
+    46→import {
+    47→  Table,
+    48→  TableBody,
+    49→  TableCell,
+    50→  TableHead,
+    51→  TableHeader,
+    52→  TableRow,
+    53→} from '@/components/ui/table';
+    54→import { Badge } from '@/components/ui/badge';
+    55→import { Skeleton } from '@/components/ui/skeleton';
+    56→import { Separator } from '@/components/ui/separator';
+    57→import { Label } from '@/components/ui/label';
+    58→import { Calendar } from '@/components/ui/calendar';
+    59→import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+    60→import { useToast } from '@/hooks/use-toast';
+    61→
+    62→// ---------------------------------------------------------------------------
+    63→// Types
+    64→// ---------------------------------------------------------------------------
+    65→
+    66→interface ReminderCustomer {
+    67→  id: string;
+    68→  name: string;
+    69→  phone: string;
+    70→}
+    71→
+    72→interface ReminderVehicle {
+    73→  id: string;
+    74→  make: string;
+    75→  model: string;
+    76→  plateNumber: string;
+    77→}
+    78→
+    79→interface Customer {
+    80→  id: string;
+    81→  name: string;
+    82→  phone: string;
+    83→}
+    84→
+    85→interface Vehicle {
+    86→  id: string;
+    87→  make: string;
+    88→  model: string;
+    89→  plateNumber: string;
+    90→  customerId: string;
+    91→}
+    92→
+    93→interface Reminder {
+    94→  id: string;
+    95→  customerId: string;
+    96→  vehicleId: string;
+    97→  type: string;
+    98→  description: string;
+    99→  dueDate: string;
+   100→  status: 'PENDING' | 'SENT' | 'COMPLETED' | 'FAILED';
+   101→  channel: 'SMS' | 'WHATSAPP' | 'EMAIL';
+   102→  sentAt: string | null;
+   103→  createdAt: string;
+   104→  customer: ReminderCustomer;
+   105→  vehicle: ReminderVehicle;
+   106→}
+   107→
+   108→interface ReminderFormData {
+   109→  customerId: string;
+   110→  vehicleId: string;
+   111→  type: string;
+   112→  description: string;
+   113→  dueDate: string;
+   114→  channel: string;
+   115→}
+   116→
+   117→// ---------------------------------------------------------------------------
+   118→// Constants
+   119→// ---------------------------------------------------------------------------
+   120→
+   121→const EMPTY_FORM: ReminderFormData = {
+   122→  customerId: '',
+   123→  vehicleId: '',
+   124→  type: '',
+   125→  description: '',
+   126→  dueDate: '',
+   127→  channel: 'SMS',
+   128→};
+   129→
+   130→const STATUS_OPTIONS = ['ALL', 'PENDING', 'SENT', 'COMPLETED', 'FAILED'] as const;
+   131→const CHANNEL_OPTIONS = ['ALL', 'SMS', 'WHATSAPP', 'EMAIL'] as const;
+   132→
+   133→const SERVICE_TYPES = [
+   134→  'Oil Change',
+   135→  'Tire Rotation',
+   136→  'Brake Inspection',
+   137→  'Battery Replacement',
+   138→  'Air Filter Replacement',
+   139→  'Transmission Service',
+   140→  'Coolant Flush',
+   141→  'Timing Belt Replacement',
+   142→  'Wheel Alignment',
+   143→  'General Inspection',
+   144→  'Other',
+   145→];
+   146→
+   147→// ---------------------------------------------------------------------------
+   148→// Helpers
+   149→// ---------------------------------------------------------------------------
+   150→
+   151→function formatDate(dateStr: string | null): string {
+   152→  if (!dateStr) return '—';
+   153→  const date = new Date(dateStr);
+   154→  return date.toLocaleDateString('en-US', {
+   155→    month: 'short',
+   156→    day: 'numeric',
+   157→    year: 'numeric',
+   158→  });
+   159→}
+   160→
+   161→function isOverdue(reminder: Reminder): boolean {
+   162→  if (reminder.status !== 'PENDING') return false;
+   163→  const today = new Date();
+   164→  today.setHours(0, 0, 0, 0);
+   165→  const dueDate = new Date(reminder.dueDate);
+   166→  dueDate.setHours(0, 0, 0, 0);
+   167→  return dueDate < today;
+   168→}
+   169→
+   170→function getStatusBadgeClasses(status: string): string {
+   171→  switch (status) {
+   172→    case 'PENDING':
+   173→      return 'bg-amber-100 text-amber-800 hover:bg-amber-100/80';
+   174→    case 'SENT':
+   175→      return 'bg-blue-100 text-blue-800 hover:bg-blue-100/80';
+   176→    case 'COMPLETED':
+   177→      return 'bg-green-100 text-green-800 hover:bg-green-100/80';
+   178→    case 'FAILED':
+   179→      return 'bg-red-100 text-red-800 hover:bg-red-100/80';
+   180→    default:
+   181→      return '';
+   182→  }
+   183→}
+   184→
+   185→function getChannelBadgeClasses(channel: string): string {
+   186→  switch (channel) {
+   187→    case 'SMS':
+   188→      return 'bg-green-100 text-green-800';
+   189→    case 'WHATSAPP':
+   190→      return 'bg-emerald-100 text-emerald-800';
+   191→    case 'EMAIL':
+   192→      return 'bg-blue-100 text-blue-800';
+   193→    default:
+   194→      return '';
+   195→  }
+   196→}
+   197→
+   198→function getChannelIcon(channel: string, className?: string) {
+   199→  const cls = className || 'h-3.5 w-3.5';
+   200→  switch (channel) {
+   201→    case 'SMS':
+   202→      return <MessageSquare className={cls} />;
+   203→    case 'WHATSAPP':
+   204→      return <Phone className={cls} />;
+   205→    case 'EMAIL':
+   206→      return <Mail className={cls} />;
+   207→    default:
+   208→      return null;
+   209→  }
+   210→}
+   211→
+   212→function getChannelLabel(channel: string): string {
+   213→  switch (channel) {
+   214→    case 'SMS':
+   215→      return 'SMS';
+   216→    case 'WHATSAPP':
+   217→      return 'WhatsApp';
+   218→    case 'EMAIL':
+   219→      return 'Email';
+   220→    default:
+   221→      return channel;
+   222→  }
+   223→}
+   224→
+   225→// ---------------------------------------------------------------------------
+   226→// Sub-components
+   227→// ---------------------------------------------------------------------------
+   228→
+   229→function StatsSkeleton() {
+   230→  return (
+   231→    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   232→      {Array.from({ length: 4 }).map((_, i) => (
+   233→        <Card key={i}>
+   234→          <CardContent className="p-4">
+   235→            <div className="flex items-center gap-3">
+   236→              <Skeleton className="h-10 w-10 rounded-lg" />
+   237→              <div className="space-y-1.5 flex-1">
+   238→                <Skeleton className="h-4 w-16" />
+   239→                <Skeleton className="h-7 w-10" />
+   240→              </div>
+   241→            </div>
+   242→          </CardContent>
+   243→        </Card>
+   244→      ))}
+   245→    </div>
+   246→  );
+   247→}
+   248→
+   249→function TableSkeleton() {
+   250→  return (
+   251→    <Card>
+   252→      <CardContent className="p-4">
+   253→        <div className="space-y-3">
+   254→          <Skeleton className="h-10 w-full" />
+   255→          {Array.from({ length: 6 }).map((_, i) => (
+   256→            <Skeleton key={i} className="h-14 w-full" />
+   257→          ))}
+   258→        </div>
+   259→      </CardContent>
+   260→    </Card>
+   261→  );
+   262→}
+   263→
+   264→function StatsCards({
+   265→  reminders,
+   266→}: {
+   267→  reminders: Reminder[];
+   268→}) {
+   269→  const total = reminders.length;
+   270→  const pending = reminders.filter((r) => r.status === 'PENDING').length;
+   271→  const sent = reminders.filter((r) => r.status === 'SENT').length;
+   272→  const completed = reminders.filter((r) => r.status === 'COMPLETED').length;
+   273→
+   274→  const stats = [
+   275→    {
+   276→      label: 'Total Reminders',
+   277→      value: total,
+   278→      icon: Bell,
+   279→      iconBg: 'bg-muted',
+   280→      iconColor: 'text-muted-foreground',
+   281→    },
+   282→    {
+   283→      label: 'Pending',
+   284→      value: pending,
+   285→      icon: Clock,
+   286→      iconBg: 'bg-amber-100',
+   287→      iconColor: 'text-amber-700',
+   288→    },
+   289→    {
+   290→      label: 'Sent',
+   291→      value: sent,
+   292→      icon: Send,
+   293→      iconBg: 'bg-blue-100',
+   294→      iconColor: 'text-blue-700',
+   295→    },
+   296→    {
+   297→      label: 'Completed',
+   298→      value: completed,
+   299→      icon: CheckCircle2,
+   300→      iconBg: 'bg-green-100',
+   301→      iconColor: 'text-green-700',
+   302→    },
+   303→  ];
+   304→
+   305→  return (
+   306→    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   307→      {stats.map((stat) => {
+   308→        const Icon = stat.icon;
+   309→        return (
+   310→          <Card key={stat.label}>
+   311→            <CardContent className="p-4">
+   312→              <div className="flex items-center gap-3">
+   313→                <div
+   314→                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.iconBg}`}
+   315→                >
+   316→                  <Icon className={`h-5 w-5 ${stat.iconColor}`} />
+   317→                </div>
+   318→                <div className="flex-1">
+   319→                  <p className="text-sm text-muted-foreground">{stat.label}</p>
+   320→                  <p className="text-2xl font-bold tabular-nums">{stat.value}</p>
+   321→                </div>
+   322→              </div>
+   323→            </CardContent>
+   324→          </Card>
+   325→        );
+   326→      })}
+   327→    </div>
+   328→  );
+   329→}
+   330→
+   331→// ---------------------------------------------------------------------------
+   332→// Main Component
+   333→// ---------------------------------------------------------------------------
+   334→
+   335→export function RemindersPage() {
+   336→  const { toast } = useToast();
+   337→
+   338→  // Data state
+   339→  const [reminders, setReminders] = useState<Reminder[]>([]);
+   340→  const [customers, setCustomers] = useState<Customer[]>([]);
+   341→  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+   342→  const [loading, setLoading] = useState(true);
+   343→
+   344→  // UI state
+   345→  const [searchQuery, setSearchQuery] = useState('');
+   346→  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+   347→  const [channelFilter, setChannelFilter] = useState<string>('ALL');
+   348→
+   349→  // Dialog state
+   350→  const [dialogOpen, setDialogOpen] = useState(false);
+   351→  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+   352→  const [formData, setFormData] = useState<ReminderFormData>(EMPTY_FORM);
+   353→  const [submitting, setSubmitting] = useState(false);
+   354→
+   355→  // -------------------------------------------------------------------------
+   356→  // Data fetching
+   357→  // -------------------------------------------------------------------------
+   358→
+   359→  const fetchReminders = useCallback(async () => {
+   360→    try {
+   361→      const res = await fetch('/api/reminders');
+   362→      if (!res.ok) throw new Error(`Failed to fetch reminders (${res.status})`);
+   363→      const data: Reminder[] = await res.json();
+   364→      setReminders(data);
+   365→    } catch (err) {
+   366→      toast({
+   367→        title: 'Error',
+   368→        description:
+   369→          err instanceof Error ? err.message : 'Failed to load reminders',
+   370→        variant: 'destructive',
+   371→      });
+   372→    }
+   373→  }, [toast]);
+   374→
+   375→  const fetchCustomers = useCallback(async () => {
+   376→    try {
+   377→      const res = await fetch('/api/customers');
+   378→      if (!res.ok) throw new Error(`Failed to fetch customers (${res.status})`);
+   379→      const data: Customer[] = await res.json();
+   380→      setCustomers(data);
+   381→    } catch (err) {
+   382→      toast({
+   383→        title: 'Error',
+   384→        description:
+   385→          err instanceof Error ? err.message : 'Failed to load customers',
+   386→        variant: 'destructive',
+   387→      });
+   388→    }
+   389→  }, [toast]);
+   390→
+   391→  const fetchVehicles = useCallback(async () => {
+   392→    try {
+   393→      const res = await fetch('/api/vehicles');
+   394→      if (!res.ok) throw new Error(`Failed to fetch vehicles (${res.status})`);
+   395→      const data: Vehicle[] = await res.json();
+   396→      setVehicles(data);
+   397→    } catch (err) {
+   398→      toast({
+   399→        title: 'Error',
+   400→        description:
+   401→          err instanceof Error ? err.message : 'Failed to load vehicles',
+   402→        variant: 'destructive',
+   403→      });
+   404→    }
+   405→  }, [toast]);
+   406→
+   407→  useEffect(() => {
+   408→    Promise.all([fetchReminders(), fetchCustomers(), fetchVehicles()]).finally(
+   409→      () => {
+   410→        setLoading(false);
+   411→      }
+   412→    );
+   413→  }, [fetchReminders, fetchCustomers, fetchVehicles]);
+   414→
+   415→  // -------------------------------------------------------------------------
+   416→  // Filtering
+   417→  // -------------------------------------------------------------------------
+   418→
+   419→  const filteredReminders = reminders.filter((r) => {
+   420→    // Status filter
+   421→    if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
+   422→
+   423→    // Channel filter
+   424→    if (channelFilter !== 'ALL' && r.channel !== channelFilter) return false;
+   425→
+   426→    // Search filter
+   427→    if (searchQuery.trim()) {
+   428→      const q = searchQuery.toLowerCase();
+   429→      return (
+   430→        r.customer.name.toLowerCase().includes(q) ||
+   431→        r.vehicle.make.toLowerCase().includes(q) ||
+   432→        r.vehicle.model.toLowerCase().includes(q) ||
+   433→        r.vehicle.plateNumber.toLowerCase().includes(q) ||
+   434→        r.type.toLowerCase().includes(q) ||
+   435→        r.description.toLowerCase().includes(q)
+   436→      );
+   437→    }
+   438→
+   439→    return true;
+   440→  });
+   441→
+   442→  // -------------------------------------------------------------------------
+   443→  // Vehicles filtered by selected customer (for dropdown)
+   444→  // -------------------------------------------------------------------------
+   445→
+   446→  const customerVehicles = formData.customerId
+   447→    ? vehicles.filter((v) => v.customerId === formData.customerId)
+   448→    : vehicles;
+   449→
+   450→  // -------------------------------------------------------------------------
+   451→  // CRUD handlers
+   452→  // -------------------------------------------------------------------------
+   453→
+   454→  function openCreateDialog() {
+   455→    setEditingReminder(null);
+   456→    setFormData(EMPTY_FORM);
+   457→    setDialogOpen(true);
+   458→  }
+   459→
+   460→  function openEditDialog(reminder: Reminder) {
+   461→    setEditingReminder(reminder);
+   462→    setFormData({
+   463→      customerId: reminder.customerId,
+   464→      vehicleId: reminder.vehicleId,
+   465→      type: reminder.type,
+   466→      description: reminder.description,
+   467→      dueDate: reminder.dueDate.split('T')[0],
+   468→      channel: reminder.channel,
+   469→    });
+   470→    setDialogOpen(true);
+   471→  }
+   472→
+   473→  async function handleSubmit(e: React.FormEvent) {
+   474→    e.preventDefault();
+   475→
+   476→    if (!formData.customerId || !formData.vehicleId || !formData.type.trim() || !formData.dueDate) {
+   477→      toast({
+   478→        title: 'Validation Error',
+   479→        description: 'Customer, Vehicle, Type, and Due Date are required.',
+   480→        variant: 'destructive',
+   481→      });
+   482→      return;
+   483→    }
+   484→
+   485→    setSubmitting(true);
+   486→    try {
+   487→      const payload = {
+   488→        customerId: formData.customerId,
+   489→        vehicleId: formData.vehicleId,
+   490→        type: formData.type.trim(),
+   491→        description: formData.description.trim(),
+   492→        dueDate: new Date(formData.dueDate).toISOString(),
+   493→        channel: formData.channel,
+   494→      };
+   495→
+   496→      const isEdit = editingReminder !== null;
+   497→      const res = await fetch('/api/reminders', {
+   498→        method: isEdit ? 'PUT' : 'POST',
+   499→        headers: { 'Content-Type': 'application/json' },
+   500→        body: JSON.stringify(
+   501→          isEdit ? { ...payload, id: editingReminder.id } : payload
+   502→        ),
+   503→      });
+   504→
+   505→      if (!res.ok)
+   506→        throw new Error(`Failed to ${isEdit ? 'update' : 'create'} reminder`);
+   507→
+   508→      toast({
+   509→        title: isEdit ? 'Reminder Updated' : 'Reminder Created',
+   510→        description: `${formData.type.trim()} reminder has been ${isEdit ? 'updated' : 'created'} successfully.`,
+   511→      });
+   512→
+   513→      setDialogOpen(false);
+   514→      await fetchReminders();
+   515→    } catch (err) {
+   516→      toast({
+   517→        title: 'Error',
+   518→        description:
+   519→          err instanceof Error
+   520→            ? err.message
+   521→            : `Failed to ${editingReminder ? 'update' : 'create'} reminder`,
+   522→        variant: 'destructive',
+   523→      });
+   524→    } finally {
+   525→      setSubmitting(false);
+   526→    }
+   527→  }
+   528→
+   529→  async function handleDelete(reminder: Reminder) {
+   530→    if (
+   531→      !confirm(
+   532→        `Are you sure you want to delete this reminder for "${reminder.type}"? This action cannot be undone.`
+   533→      )
+   534→    ) {
+   535→      return;
+   536→    }
+   537→
+   538→    try {
+   539→      const res = await fetch(`/api/reminders?id=${reminder.id}`, {
+   540→        method: 'DELETE',
+   541→      });
+   542→      if (!res.ok) throw new Error(`Failed to delete reminder (${res.status})`);
+   543→
+   544→      toast({
+   545→        title: 'Reminder Deleted',
+   546→        description: `The "${reminder.type}" reminder has been removed.`,
+   547→      });
+   548→
+   549→      await fetchReminders();
+   550→    } catch (err) {
+   551→      toast({
+   552→        title: 'Error',
+   553→        description:
+   554→          err instanceof Error ? err.message : 'Failed to delete reminder',
+   555→        variant: 'destructive',
+   556→      });
+   557→    }
+   558→  }
+   559→
+   560→  async function handleMarkAsSent(reminder: Reminder) {
+   561→    try {
+   562→      const res = await fetch('/api/reminders', {
+   563→        method: 'PUT',
+   564→        headers: { 'Content-Type': 'application/json' },
+   565→        body: JSON.stringify({
+   566→          id: reminder.id,
+   567→          status: 'SENT',
+   568→          sentAt: new Date().toISOString(),
+   569→        }),
+   570→      });
+   571→
+   572→      if (!res.ok) throw new Error('Failed to mark reminder as sent');
+   573→
+   574→      toast({
+   575→        title: 'Reminder Sent',
+   576→        description: `The "${reminder.type}" reminder has been marked as sent.`,
+   577→      });
+   578→
+   579→      await fetchReminders();
+   580→    } catch (err) {
+   581→      toast({
+   582→        title: 'Error',
+   583→        description:
+   584→          err instanceof Error
+   585→            ? err.message
+   586→            : 'Failed to update reminder status',
+   587→        variant: 'destructive',
+   588→      });
+   589→    }
+   590→  }
+   591→
+   592→  async function handleMarkComplete(reminder: Reminder) {
+   593→    try {
+   594→      const res = await fetch('/api/reminders', {
+   595→        method: 'PUT',
+   596→        headers: { 'Content-Type': 'application/json' },
+   597→        body: JSON.stringify({
+   598→          id: reminder.id,
+   599→          status: 'COMPLETED',
+   600→        }),
+   601→      });
+   602→
+   603→      if (!res.ok)
+   604→        throw new Error('Failed to mark reminder as complete');
+   605→
+   606→      toast({
+   607→        title: 'Reminder Completed',
+   608→        description: `The "${reminder.type}" reminder has been marked as complete.`,
+   609→      });
+   610→
+   611→      await fetchReminders();
+   612→    } catch (err) {
+   613→      toast({
+   614→        title: 'Error',
+   615→        description:
+   616→          err instanceof Error
+   617→            ? err.message
+   618→            : 'Failed to update reminder status',
+   619→        variant: 'destructive',
+   620→      });
+   621→    }
+   622→  }
+   623→
+   624→  function updateFormField(field: keyof ReminderFormData, value: string) {
+   625→    setFormData((prev) => {
+   626→      const updated = { ...prev, [field]: value };
+   627→      // Clear vehicle when customer changes
+   628→      if (field === 'customerId') {
+   629→        updated.vehicleId = '';
+   630→      }
+   631→      return updated;
+   632→    });
+   633→  }
+   634→
+   635→  // -------------------------------------------------------------------------
+   636→  // Render: Loading
+   637→  // -------------------------------------------------------------------------
+   638→
+   639→  if (loading) {
+   640→    return (
+   641→      <div className="space-y-6">
+   642→        {/* Header skeleton */}
+   643→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   644→          <div className="space-y-2">
+   645→            <Skeleton className="h-7 w-52" />
+   646→            <Skeleton className="h-4 w-80" />
+   647→          </div>
+   648→          <Skeleton className="h-10 w-40" />
+   649→        </div>
+   650→        {/* Stats skeleton */}
+   651→        <StatsSkeleton />
+   652→        {/* Filter bar skeleton */}
+   653→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+   654→          <Skeleton className="h-10 w-full max-w-sm" />
+   655→          <Skeleton className="h-10 w-36" />
+   656→          <Skeleton className="h-10 w-36" />
+   657→        </div>
+   658→        {/* Table skeleton */}
+   659→        <TableSkeleton />
+   660→      </div>
+   661→    );
+   662→  }
+   663→
+   664→  // -------------------------------------------------------------------------
+   665→  // Render: Main
+   666→  // -------------------------------------------------------------------------
+   667→
+   668→  return (
+   669→    <div className="space-y-6">
+   670→      {/* Header */}
+   671→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   672→        <div>
+   673→          <h1 className="text-2xl font-bold tracking-tight">Service Reminders</h1>
+   674→          <p className="text-muted-foreground text-sm mt-1">
+   675→            Schedule and track service reminders for your customers and their
+   676→            vehicles.
+   677→          </p>
+   678→        </div>
+   679→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   680→          <Button onClick={openCreateDialog} className="gap-2">
+   681→            <Plus className="h-4 w-4" />
+   682→            Create Reminder
+   683→          </Button>
+   684→          <DialogContent className="sm:max-w-lg">
+   685→            <form onSubmit={handleSubmit}>
+   686→              <DialogHeader>
+   687→                <DialogTitle>
+   688→                  {editingReminder ? 'Edit Reminder' : 'Create Reminder'}
+   689→                </DialogTitle>
+   690→                <DialogDescription>
+   691→                  {editingReminder
+   692→                    ? 'Update the reminder details below.'
+   693→                    : 'Schedule a new service reminder for a customer.'}
+   694→                </DialogDescription>
+   695→              </DialogHeader>
+   696→              <Separator className="my-2" />
+   697→              <div className="grid gap-4 py-2 max-h-[60vh] overflow-y-auto pr-2">
+   698→                {/* Customer */}
+   699→                <div className="grid gap-2">
+   700→                  <Label htmlFor="reminder-customer">
+   701→                    Customer <span className="text-destructive">*</span>
+   702→                  </Label>
+   703→                  <Select
+   704→                    value={formData.customerId}
+   705→                    onValueChange={(val) => updateFormField('customerId', val)}
+   706→                    disabled={submitting}
+   707→                  >
+   708→                    <SelectTrigger id="reminder-customer" className="w-full">
+   709→                      <SelectValue placeholder="Select a customer" />
+   710→                    </SelectTrigger>
+   711→                    <SelectContent>
+   712→                      {customers.map((customer) => (
+   713→                        <SelectItem key={customer.id} value={customer.id}>
+   714→                          <div className="flex items-center gap-2">
+   715→                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+   716→                            {customer.name} — {customer.phone}
+   717→                          </div>
+   718→                        </SelectItem>
+   719→                      ))}
+   720→                    </SelectContent>
+   721→                  </Select>
+   722→                </div>
+   723→
+   724→                {/* Vehicle */}
+   725→                <div className="grid gap-2">
+   726→                  <Label htmlFor="reminder-vehicle">
+   727→                    Vehicle <span className="text-destructive">*</span>
+   728→                  </Label>
+   729→                  <Select
+   730→                    value={formData.vehicleId}
+   731→                    onValueChange={(val) => updateFormField('vehicleId', val)}
+   732→                    disabled={submitting || !formData.customerId}
+   733→                  >
+   734→                    <SelectTrigger id="reminder-vehicle" className="w-full">
+   735→                      <SelectValue
+   736→                        placeholder={
+   737→                          formData.customerId
+   738→                            ? 'Select a vehicle'
+   739→                            : 'Select a customer first'
+   740→                        }
+   741→                      />
+   742→                    </SelectTrigger>
+   743→                    <SelectContent>
+   744→                      {customerVehicles.map((vehicle) => (
+   745→                        <SelectItem key={vehicle.id} value={vehicle.id}>
+   746→                          <div className="flex items-center gap-2">
+   747→                            <Car className="h-3.5 w-3.5 text-muted-foreground" />
+   748→                            {vehicle.make} {vehicle.model} — {vehicle.plateNumber}
+   749→                          </div>
+   750→                        </SelectItem>
+   751→                      ))}
+   752→                      {customerVehicles.length === 0 && formData.customerId && (
+   753→                        <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+   754→                          No vehicles found for this customer
+   755→                        </div>
+   756→                      )}
+   757→                    </SelectContent>
+   758→                  </Select>
+   759→                </div>
+   760→
+   761→                {/* Type */}
+   762→                <div className="grid gap-2">
+   763→                  <Label htmlFor="reminder-type">
+   764→                    Type <span className="text-destructive">*</span>
+   765→                  </Label>
+   766→                  <Select
+   767→                    value={formData.type}
+   768→                    onValueChange={(val) => updateFormField('type', val)}
+   769→                    disabled={submitting}
+   770→                  >
+   771→                    <SelectTrigger id="reminder-type" className="w-full">
+   772→                      <SelectValue placeholder="Select service type" />
+   773→                    </SelectTrigger>
+   774→                    <SelectContent>
+   775→                      {SERVICE_TYPES.map((type) => (
+   776→                        <SelectItem key={type} value={type}>
+   777→                          {type}
+   778→                        </SelectItem>
+   779→                      ))}
+   780→                    </SelectContent>
+   781→                  </Select>
+   782→                </div>
+   783→
+   784→                {/* Description */}
+   785→                <div className="grid gap-2">
+   786→                  <Label htmlFor="reminder-description">Description</Label>
+   787→                  <Input
+   788→                    id="reminder-description"
+   789→                    placeholder="e.g. Next oil change due at 40,000 miles"
+   790→                    value={formData.description}
+   791→                    onChange={(e) => updateFormField('description', e.target.value)}
+   792→                    disabled={submitting}
+   793→                  />
+   794→                </div>
+   795→
+   796→                {/* Due Date */}
+   797→                <div className="grid gap-2">
+   798→                  <Label>
+   799→                    Due Date <span className="text-destructive">*</span>
+   800→                  </Label>
+   801→                  <Popover>
+   802→                    <PopoverTrigger asChild>
+   803→                      <Button
+   804→                        type="button"
+   805→                        variant="outline"
+   806→                        className="w-full justify-start text-left font-normal"
+   807→                        disabled={submitting}
+   808→                      >
+   809→                        <CalendarDays className="mr-2 h-4 w-4" />
+   810→                        {formData.dueDate
+   811→                          ? formatDate(formData.dueDate)
+   812→                          : 'Pick a date'}
+   813→                      </Button>
+   814→                    </PopoverTrigger>
+   815→                    <PopoverContent className="w-auto p-0" align="start">
+   816→                      <Calendar
+   817→                        mode="single"
+   818→                        selected={
+   819→                          formData.dueDate
+   820→                            ? new Date(formData.dueDate)
+   821→                            : undefined
+   822→                        }
+   823→                        onSelect={(date) =>
+   824→                          updateFormField(
+   825→                            'dueDate',
+   826→                            date ? date.toISOString().split('T')[0] : ''
+   827→                          )
+   828→                        }
+   829→                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+   830→                        initialFocus
+   831→                      />
+   832→                    </PopoverContent>
+   833→                  </Popover>
+   834→                </div>
+   835→
+   836→                {/* Channel */}
+   837→                <div className="grid gap-2">
+   838→                  <Label htmlFor="reminder-channel">Channel</Label>
+   839→                  <Select
+   840→                    value={formData.channel}
+   841→                    onValueChange={(val) => updateFormField('channel', val)}
+   842→                    disabled={submitting}
+   843→                  >
+   844→                    <SelectTrigger id="reminder-channel" className="w-full">
+   845→                      <SelectValue placeholder="Select channel" />
+   846→                    </SelectTrigger>
+   847→                    <SelectContent>
+   848→                      <SelectItem value="SMS">
+   849→                        <div className="flex items-center gap-2">
+   850→                          <MessageSquare className="h-3.5 w-3.5 text-green-700" />
+   851→                          SMS
+   852→                        </div>
+   853→                      </SelectItem>
+   854→                      <SelectItem value="WHATSAPP">
+   855→                        <div className="flex items-center gap-2">
+   856→                          <Phone className="h-3.5 w-3.5 text-emerald-700" />
+   857→                          WhatsApp
+   858→                        </div>
+   859→                      </SelectItem>
+   860→                      <SelectItem value="EMAIL">
+   861→                        <div className="flex items-center gap-2">
+   862→                          <Mail className="h-3.5 w-3.5 text-blue-700" />
+   863→                          Email
+   864→                        </div>
+   865→                      </SelectItem>
+   866→                    </SelectContent>
+   867→                  </Select>
+   868→                </div>
+   869→              </div>
+   870→              <DialogFooter className="pt-2">
+   871→                <Button
+   872→                  type="button"
+   873→                  variant="outline"
+   874→                  onClick={() => setDialogOpen(false)}
+   875→                  disabled={submitting}
+   876→                >
+   877→                  Cancel
+   878→                </Button>
+   879→                <Button type="submit" disabled={submitting}>
+   880→                  {submitting
+   881→                    ? 'Saving...'
+   882→                    : editingReminder
+   883→                      ? 'Update Reminder'
+   884→                      : 'Create Reminder'}
+   885→                </Button>
+   886→              </DialogFooter>
+   887→            </form>
+   888→          </DialogContent>
+   889→        </Dialog>
+   890→      </div>
+   891→
+   892→      {/* Stats Cards */}
+   893→      <StatsCards reminders={reminders} />
+   894→
+   895→      {/* Filter bar */}
+   896→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+   897→        <div className="relative flex-1 max-w-sm">
+   898→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+   899→          <Input
+   900→            placeholder="Search by customer, vehicle, or type..."
+   901→            value={searchQuery}
+   902→            onChange={(e) => setSearchQuery(e.target.value)}
+   903→            className="pl-9"
+   904→          />
+   905→        </div>
+   906→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   907→          <SelectTrigger className="w-[160px]">
+   908→            <SelectValue placeholder="Status" />
+   909→          </SelectTrigger>
+   910→          <SelectContent>
+   911→            {STATUS_OPTIONS.map((status) => (
+   912→              <SelectItem key={status} value={status}>
+   913→                {status === 'ALL' ? 'All Statuses' : status.charAt(0) + status.slice(1).toLowerCase()}
+   914→              </SelectItem>
+   915→            ))}
+   916→          </SelectContent>
+   917→        </Select>
+   918→        <Select value={channelFilter} onValueChange={setChannelFilter}>
+   919→          <SelectTrigger className="w-[160px]">
+   920→            <SelectValue placeholder="Channel" />
+   921→          </SelectTrigger>
+   922→          <SelectContent>
+   923→            {CHANNEL_OPTIONS.map((channel) => (
+   924→              <SelectItem key={channel} value={channel}>
+   925→                {channel === 'ALL'
+   926→                  ? 'All Channels'
+   927→                  : getChannelLabel(channel)}
+   928→              </SelectItem>
+   929→            ))}
+   930→          </SelectContent>
+   931→        </Select>
+   932→      </div>
+   933→
+   934→      {/* Reminders Table */}
+   935→      <Card>
+   936→        <CardContent className="p-0">
+   937→          <Table>
+   938→            <TableHeader>
+   939→              <TableRow>
+   940→                <TableHead>
+   941→                  <div className="flex items-center gap-1.5">
+   942→                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+   943→                    Customer
+   944→                  </div>
+   945→                </TableHead>
+   946→                <TableHead className="hidden md:table-cell">
+   947→                  <div className="flex items-center gap-1.5">
+   948→                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
+   949→                    Vehicle
+   950→                  </div>
+   951→                </TableHead>
+   952→                <TableHead>
+   953→                  <div className="flex items-center gap-1.5">
+   954→                    <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+   955→                    Type
+   956→                  </div>
+   957→                </TableHead>
+   958→                <TableHead className="hidden lg:table-cell">Description</TableHead>
+   959→                <TableHead>
+   960→                  <div className="flex items-center gap-1.5">
+   961→                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+   962→                    Due Date
+   963→                  </div>
+   964→                </TableHead>
+   965→                <TableHead>Status</TableHead>
+   966→                <TableHead className="hidden sm:table-cell">Channel</TableHead>
+   967→                <TableHead className="hidden xl:table-cell">
+   968→                  <div className="flex items-center gap-1.5">
+   969→                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+   970→                    Sent At
+   971→                  </div>
+   972→                </TableHead>
+   973→                <TableHead className="text-right">Actions</TableHead>
+   974→              </TableRow>
+   975→            </TableHeader>
+   976→            <TableBody>
+   977→              {filteredReminders.length === 0 ? (
+   978→                <TableRow>
+   979→                  <TableCell colSpan={9} className="h-32 text-center">
+   980→                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+   981→                      <Bell className="h-8 w-8 opacity-40" />
+   982→                      <p className="text-sm font-medium">
+   983→                        {searchQuery.trim() ||
+   984→                        statusFilter !== 'ALL' ||
+   985→                        channelFilter !== 'ALL'
+   986→                          ? 'No reminders match your filters.'
+   987→                          : 'No reminders found.'}
+   988→                      </p>
+   989→                      {!searchQuery.trim() &&
+   990→                        statusFilter === 'ALL' &&
+   991→                        channelFilter === 'ALL' && (
+   992→                          <p className="text-xs">
+   993→                            Click &quot;Create Reminder&quot; to get started.
+   994→                          </p>
+   995→                        )}
+   996→                    </div>
+   997→                  </TableCell>
+   998→                </TableRow>
+   999→              ) : (
+  1000→                filteredReminders.map((reminder) => {
+  1001→                  const overdue = isOverdue(reminder);
+  1002→                  return (
+  1003→                    <TableRow
+  1004→                      key={reminder.id}
+  1005→                      className={overdue ? 'bg-red-50/60 hover:bg-red-50/80' : undefined}
+  1006→                    >
+  1007→                      {/* Customer */}
+  1008→                      <TableCell>
+  1009→                        <div className="flex flex-col">
+  1010→                          <span className="font-medium">
+  1011→                            {reminder.customer.name}
+  1012→                          </span>
+  1013→                          <span className="text-xs text-muted-foreground">
+  1014→                            {reminder.customer.phone}
+  1015→                          </span>
+  1016→                        </div>
+  1017→                      </TableCell>
+  1018→
+  1019→                      {/* Vehicle */}
+  1020→                      <TableCell className="hidden md:table-cell">
+  1021→                        <div className="flex flex-col">
+  1022→                          <span className="font-medium">
+  1023→                            {reminder.vehicle.make} {reminder.vehicle.model}
+  1024→                          </span>
+  1025→                          <span className="text-xs text-muted-foreground font-mono">
+  1026→                            {reminder.vehicle.plateNumber}
+  1027→                          </span>
+  1028→                        </div>
+  1029→                      </TableCell>
+  1030→
+  1031→                      {/* Type */}
+  1032→                      <TableCell>
+  1033→                        <div className="flex items-center gap-1.5">
+  1034→                          {overdue && (
+  1035→                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+  1036→                          )}
+  1037→                          <span className="font-medium">{reminder.type}</span>
+  1038→                        </div>
+  1039→                      </TableCell>
+  1040→
+  1041→                      {/* Description */}
+  1042→                      <TableCell className="hidden lg:table-cell">
+  1043→                        <span className="text-sm text-muted-foreground line-clamp-2 max-w-[200px]">
+  1044→                          {reminder.description}
+  1045→                        </span>
+  1046→                      </TableCell>
+  1047→
+  1048→                      {/* Due Date */}
+  1049→                      <TableCell>
+  1050→                        <span
+  1051→                          className={`text-sm ${overdue ? 'text-red-700 font-semibold' : ''}`}
+  1052→                        >
+  1053→                          {formatDate(reminder.dueDate)}
+  1054→                        </span>
+  1055→                        {overdue && (
+  1056→                          <span className="block text-[10px] text-red-600 font-medium">
+  1057→                            Overdue
+  1058→                          </span>
+  1059→                        )}
+  1060→                      </TableCell>
+  1061→
+  1062→                      {/* Status */}
+  1063→                      <TableCell>
+  1064→                        <Badge
+  1065→                          variant="secondary"
+  1066→                          className={getStatusBadgeClasses(reminder.status)}
+  1067→                        >
+  1068→                          {reminder.status.charAt(0) +
+  1069→                            reminder.status.slice(1).toLowerCase()}
+  1070→                        </Badge>
+  1071→                      </TableCell>
+  1072→
+  1073→                      {/* Channel */}
+  1074→                      <TableCell className="hidden sm:table-cell">
+  1075→                        <Badge
+  1076→                          variant="secondary"
+  1077→                          className={`gap-1.5 ${getChannelBadgeClasses(reminder.channel)}`}
+  1078→                        >
+  1079→                          {getChannelIcon(reminder.channel)}
+  1080→                          {getChannelLabel(reminder.channel)}
+  1081→                        </Badge>
+  1082→                      </TableCell>
+  1083→
+  1084→                      {/* Sent At */}
+  1085→                      <TableCell className="hidden xl:table-cell">
+  1086→                        <span className="text-sm text-muted-foreground">
+  1087→                          {formatDate(reminder.sentAt)}
+  1088→                        </span>
+  1089→                      </TableCell>
+  1090→
+  1091→                      {/* Actions */}
+  1092→                      <TableCell className="text-right">
+  1093→                        <div className="flex items-center justify-end gap-1">
+  1094→                          {(reminder.status === 'PENDING' ||
+  1095→                            reminder.status === 'FAILED') && (
+  1096→                            <Button
+  1097→                              variant="ghost"
+  1098→                              size="icon"
+  1099→                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+  1100→                              onClick={() => handleMarkAsSent(reminder)}
+  1101→                              aria-label="Mark as Sent"
+  1102→                              title="Mark as Sent"
+  1103→                            >
+  1104→                              <Send className="h-4 w-4" />
+  1105→                            </Button>
+  1106→                          )}
+  1107→                          {(reminder.status === 'PENDING' ||
+  1108→                            reminder.status === 'SENT') && (
+  1109→                            <Button
+  1110→                              variant="ghost"
+  1111→                              size="icon"
+  1112→                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+  1113→                              onClick={() => handleMarkComplete(reminder)}
+  1114→                              aria-label="Mark as Complete"
+  1115→                              title="Mark as Complete"
+  1116→                            >
+  1117→                              <CheckCircle2 className="h-4 w-4" />
+  1118→                            </Button>
+  1119→                          )}
+  1120→                          <Button
+  1121→                            variant="ghost"
+  1122→                            size="icon"
+  1123→                            className="h-8 w-8"
+  1124→                            onClick={() => openEditDialog(reminder)}
+  1125→                            aria-label="Edit reminder"
+  1126→                            title="Edit"
+  1127→                          >
+  1128→                            <Edit className="h-4 w-4" />
+  1129→                          </Button>
+  1130→                          <Button
+  1131→                            variant="ghost"
+  1132→                            size="icon"
+  1133→                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+  1134→                            onClick={() => handleDelete(reminder)}
+  1135→                            aria-label="Delete reminder"
+  1136→                            title="Delete"
+  1137→                          >
+  1138→                            <Trash2 className="h-4 w-4" />
+  1139→                          </Button>
+  1140→                        </div>
+  1141→                      </TableCell>
+  1142→                    </TableRow>
+  1143→                  );
+  1144→                })
+  1145→              )}
+  1146→            </TableBody>
+  1147→          </Table>
+  1148→        </CardContent>
+  1149→      </Card>
+  1150→    </div>
+  1151→  );
+  1152→}
+  1153→

@@ -58,6 +58,7 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -334,6 +335,7 @@ function StatsCards({
 
 export function RemindersPage() {
   const { toast } = useToast();
+  const { canCreate, canEdit } = useAppStore();
 
   // Data state
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -676,6 +678,7 @@ export function RemindersPage() {
             vehicles.
           </p>
         </div>
+        {canCreate('reminders') && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <Button onClick={openCreateDialog} className="gap-2">
             <Plus className="h-4 w-4" />
@@ -887,6 +890,7 @@ export function RemindersPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -1091,7 +1095,7 @@ export function RemindersPage() {
                       {/* Actions */}
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {(reminder.status === 'PENDING' ||
+                          {canEdit('reminders') && (reminder.status === 'PENDING' ||
                             reminder.status === 'FAILED') && (
                             <Button
                               variant="ghost"
@@ -1104,7 +1108,7 @@ export function RemindersPage() {
                               <Send className="h-4 w-4" />
                             </Button>
                           )}
-                          {(reminder.status === 'PENDING' ||
+                          {canEdit('reminders') && (reminder.status === 'PENDING' ||
                             reminder.status === 'SENT') && (
                             <Button
                               variant="ghost"
@@ -1117,6 +1121,7 @@ export function RemindersPage() {
                               <CheckCircle2 className="h-4 w-4" />
                             </Button>
                           )}
+                          {canEdit('reminders') && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1127,6 +1132,8 @@ export function RemindersPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          )}
+                          {canEdit('reminders') && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1137,6 +1144,7 @@ export function RemindersPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -1,0 +1,1297 @@
+     1→'use client';
+     2→
+     3→import { Fragment, useEffect, useState, useCallback } from 'react';
+     4→import {
+     5→  ClipboardList,
+     6→  Plus,
+     7→  Search,
+     8→  Edit,
+     9→  Trash2,
+    10→  ChevronDown,
+    11→  ChevronUp,
+    12→  Eye,
+    13→  RefreshCw,
+    14→  Car,
+    15→  User,
+    16→  Wrench,
+    17→} from 'lucide-react';
+    18→import { Card, CardContent } from '@/components/ui/card';
+    19→import { Button } from '@/components/ui/button';
+    20→import { Input } from '@/components/ui/input';
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogHeader,
+    25→  DialogTitle,
+    26→  DialogTrigger,
+    27→  DialogFooter,
+    28→  DialogDescription,
+    29→} from '@/components/ui/dialog';
+    30→import {
+    31→  Select,
+    32→  SelectContent,
+    33→  SelectItem,
+    34→  SelectTrigger,
+    35→  SelectValue,
+    36→} from '@/components/ui/select';
+    37→import {
+    38→  Table,
+    39→  TableBody,
+    40→  TableCell,
+    41→  TableHead,
+    42→  TableHeader,
+    43→  TableRow,
+    44→} from '@/components/ui/table';
+    45→import { Badge } from '@/components/ui/badge';
+    46→import { Separator } from '@/components/ui/separator';
+    47→import { Skeleton } from '@/components/ui/skeleton';
+    48→import { Textarea } from '@/components/ui/textarea';
+    49→import { Checkbox } from '@/components/ui/checkbox';
+    50→import { useToast } from '@/hooks/use-toast';
+    51→
+    52→// ---------------------------------------------------------------------------
+    53→// Types
+    54→// ---------------------------------------------------------------------------
+    55→
+    56→type JobStatus =
+    57→  | 'PENDING'
+    58→  | 'IN_PROGRESS'
+    59→  | 'WAITING_PARTS'
+    60→  | 'COMPLETED'
+    61→  | 'APPROVED'
+    62→  | 'INVOICED'
+    63→  | 'CANCELLED';
+    64→
+    65→interface Task {
+    66→  id: string;
+    67→  taskName: string;
+    68→  completed: boolean;
+    69→  laborHrs: number;
+    70→}
+    71→
+    72→interface PartUsed {
+    73→  id: string;
+    74→  quantity: number;
+    75→  unitPrice: number;
+    76→  sparePart: {
+    77→    name: string;
+    78→    partNumber: string;
+    79→  };
+    80→}
+    81→
+    82→interface LabourEntry {
+    83→  id: string;
+    84→  hours: number;
+    85→  rate: number;
+    86→  staff: {
+    87→    name: string;
+    88→  };
+    89→  date: string;
+    90→}
+    91→
+    92→interface JobCard {
+    93→  id: string;
+    94→  jobNumber: string;
+    95→  customerId: string;
+    96→  vehicleId: string;
+    97→  technicianId: string;
+    98→  description: string;
+    99→  status: JobStatus;
+   100→  priority: number;
+   101→  estimatedCost: number;
+   102→  actualCost: number;
+   103→  startedAt: string;
+   104→  completedAt: string;
+   105→  createdAt: string;
+   106→  customer: {
+   107→    id: string;
+   108→    name: string;
+   109→  };
+   110→  vehicle: {
+   111→    make: string;
+   112→    model: string;
+   113→    plateNumber: string;
+   114→  };
+   115→  technician: {
+   116→    id: string;
+   117→    name: string;
+   118→  };
+   119→  tasks: Task[];
+   120→  partsUsed: PartUsed[];
+   121→  labourEntries: LabourEntry[];
+   122→}
+   123→
+   124→interface Customer {
+   125→  id: string;
+   126→  name: string;
+   127→}
+   128→
+   129→interface Vehicle {
+   130→  id: string;
+   131→  make: string;
+   132→  model: string;
+   133→  plateNumber: string;
+   134→  customerId: string;
+   135→}
+   136→
+   137→interface Staff {
+   138→  id: string;
+   139→  name: string;
+   140→}
+   141→
+   142→interface JobCardFormData {
+   143→  customerId: string;
+   144→  vehicleId: string;
+   145→  technicianId: string;
+   146→  description: string;
+   147→  priority: string;
+   148→  estimatedCost: string;
+   149→}
+   150→
+   151→// ---------------------------------------------------------------------------
+   152→// Constants
+   153→// ---------------------------------------------------------------------------
+   154→
+   155→const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
+   156→  { value: 'PENDING', label: 'Pending' },
+   157→  { value: 'IN_PROGRESS', label: 'In Progress' },
+   158→  { value: 'WAITING_PARTS', label: 'Waiting Parts' },
+   159→  { value: 'COMPLETED', label: 'Completed' },
+   160→  { value: 'APPROVED', label: 'Approved' },
+   161→  { value: 'INVOICED', label: 'Invoiced' },
+   162→  { value: 'CANCELLED', label: 'Cancelled' },
+   163→];
+   164→
+   165→const STATUS_FILTER_OPTIONS = [
+   166→  { value: 'ALL', label: 'All Statuses' },
+   167→  ...STATUS_OPTIONS,
+   168→];
+   169→
+   170→const STATUS_BADGE_CLASSES: Record<JobStatus, string> = {
+   171→  PENDING: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700',
+   172→  IN_PROGRESS: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800',
+   173→  WAITING_PARTS: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800',
+   174→  COMPLETED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800',
+   175→  APPROVED: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800',
+   176→  INVOICED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border-purple-200 dark:border-purple-800',
+   177→  CANCELLED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-red-200 dark:border-red-800',
+   178→};
+   179→
+   180→const EMPTY_FORM: JobCardFormData = {
+   181→  customerId: '',
+   182→  vehicleId: '',
+   183→  technicianId: '',
+   184→  description: '',
+   185→  priority: '2',
+   186→  estimatedCost: '',
+   187→};
+   188→
+   189→// ---------------------------------------------------------------------------
+   190→// Helpers
+   191→// ---------------------------------------------------------------------------
+   192→
+   193→function formatCurrency(value: number): string {
+   194→  return new Intl.NumberFormat('en-US', {
+   195→    style: 'currency',
+   196→    currency: 'USD',
+   197→  }).format(value);
+   198→}
+   199→
+   200→function formatDate(dateStr: string): string {
+   201→  if (!dateStr) return '—';
+   202→  return new Date(dateStr).toLocaleDateString('en-US', {
+   203→    month: 'short',
+   204→    day: 'numeric',
+   205→    year: 'numeric',
+   206→  });
+   207→}
+   208→
+   209→function formatStatusLabel(status: JobStatus): string {
+   210→  return status.replace(/_/g, ' ');
+   211→}
+   212→
+   213→function getPriorityBadge(priority: number) {
+   214→  switch (priority) {
+   215→    case 1:
+   216→      return <Badge variant="secondary">Low</Badge>;
+   217→    case 3:
+   218→      return (
+   219→        <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-800">
+   220→          High
+   221→        </Badge>
+   222→      );
+   223→    default:
+   224→      return (
+   225→        <Badge className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800">
+   226→          Medium
+   227→        </Badge>
+   228→      );
+   229→  }
+   230→}
+   231→
+   232→function getPriorityLabel(priority: number): string {
+   233→  switch (priority) {
+   234→    case 1:
+   235→      return 'Low';
+   236→    case 3:
+   237→      return 'High';
+   238→    default:
+   239→      return 'Medium';
+   240→  }
+   241→}
+   242→
+   243→// ---------------------------------------------------------------------------
+   244→// Sub-components
+   245→// ---------------------------------------------------------------------------
+   246→
+   247→function TableSkeleton() {
+   248→  return (
+   249→    <Card>
+   250→      <CardContent className="p-4">
+   251→        <div className="space-y-3">
+   252→          <Skeleton className="h-10 w-full" />
+   253→          {Array.from({ length: 6 }).map((_, i) => (
+   254→            <Skeleton key={i} className="h-14 w-full" />
+   255→          ))}
+   256→        </div>
+   257→      </CardContent>
+   258→    </Card>
+   259→  );
+   260→}
+   261→
+   262→function JobDetailPanel({ job }: { job: JobCard }) {
+   263→  const tasksCompleted = job.tasks.filter((t) => t.completed).length;
+   264→  const tasksTotal = job.tasks.length;
+   265→  const partsTotal = job.partsUsed.reduce(
+   266→    (sum, p) => sum + p.quantity * p.unitPrice,
+   267→    0
+   268→  );
+   269→  const labourTotal = job.labourEntries.reduce(
+   270→    (sum, l) => sum + l.hours * l.rate,
+   271→    0
+   272→  );
+   273→  const labourHoursTotal = job.labourEntries.reduce(
+   274→    (sum, l) => sum + l.hours,
+   275→    0
+   276→  );
+   277→
+   278→  return (
+   279→    <div className="px-6 py-4 bg-muted/20 space-y-5">
+   280→      {/* Tasks Checklist */}
+   281→      <div>
+   282→        <div className="flex items-center gap-2 mb-3">
+   283→          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+   284→          <h4 className="text-sm font-semibold">
+   285→            Tasks ({tasksCompleted}/{tasksTotal} completed)
+   286→          </h4>
+   287→        </div>
+   288→        {job.tasks.length === 0 ? (
+   289→          <p className="text-sm text-muted-foreground pl-6">No tasks assigned.</p>
+   290→        ) : (
+   291→          <ul className="space-y-2 pl-1">
+   292→            {job.tasks.map((task) => (
+   293→              <li key={task.id} className="flex items-center gap-3">
+   294→                <Checkbox checked={task.completed} disabled />
+   295→                <span
+   296→                  className={`text-sm ${
+   297→                    task.completed
+   298→                      ? 'text-muted-foreground line-through'
+   299→                      : 'text-foreground'
+   300→                  }`}
+   301→                >
+   302→                  {task.taskName}
+   303→                </span>
+   304→                <span className="text-xs text-muted-foreground ml-auto tabular-nums">
+   305→                  {task.laborHrs}h
+   306→                </span>
+   307→              </li>
+   308→            ))}
+   309→          </ul>
+   310→        )}
+   311→      </div>
+   312→
+   313→      <Separator />
+   314→
+   315→      {/* Parts Used */}
+   316→      <div>
+   317→        <div className="flex items-center gap-2 mb-3">
+   318→          <Wrench className="h-4 w-4 text-muted-foreground" />
+   319→          <h4 className="text-sm font-semibold">Parts Used</h4>
+   320→        </div>
+   321→        {job.partsUsed.length === 0 ? (
+   322→          <p className="text-sm text-muted-foreground pl-6">No parts recorded.</p>
+   323→        ) : (
+   324→          <div className="rounded-lg border bg-background overflow-hidden">
+   325→            <Table>
+   326→              <TableHeader>
+   327→                <TableRow className="bg-muted/50 hover:bg-muted/50">
+   328→                  <TableHead className="text-xs font-semibold uppercase tracking-wider">
+   329→                    Part
+   330→                  </TableHead>
+   331→                  <TableHead className="text-xs font-semibold uppercase tracking-wider">
+   332→                    Part #
+   333→                  </TableHead>
+   334→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-center">
+   335→                    Qty
+   336→                  </TableHead>
+   337→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">
+   338→                    Unit Price
+   339→                  </TableHead>
+   340→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">
+   341→                    Total
+   342→                  </TableHead>
+   343→                </TableRow>
+   344→              </TableHeader>
+   345→              <TableBody>
+   346→                {job.partsUsed.map((part) => (
+   347→                  <TableRow key={part.id}>
+   348→                    <TableCell className="font-medium text-sm">
+   349→                      {part.sparePart.name}
+   350→                    </TableCell>
+   351→                    <TableCell className="font-mono text-xs text-muted-foreground">
+   352→                      {part.sparePart.partNumber}
+   353→                    </TableCell>
+   354→                    <TableCell className="text-center tabular-nums">
+   355→                      {part.quantity}
+   356→                    </TableCell>
+   357→                    <TableCell className="text-right tabular-nums text-sm">
+   358→                      {formatCurrency(part.unitPrice)}
+   359→                    </TableCell>
+   360→                    <TableCell className="text-right tabular-nums text-sm font-medium">
+   361→                      {formatCurrency(part.quantity * part.unitPrice)}
+   362→                    </TableCell>
+   363→                  </TableRow>
+   364→                ))}
+   365→                <TableRow className="bg-muted/30 hover:bg-muted/30">
+   366→                  <TableCell colSpan={4} className="text-right text-sm font-semibold">
+   367→                    Parts Total
+   368→                  </TableCell>
+   369→                  <TableCell className="text-right tabular-nums text-sm font-bold">
+   370→                    {formatCurrency(partsTotal)}
+   371→                  </TableCell>
+   372→                </TableRow>
+   373→              </TableBody>
+   374→            </Table>
+   375→          </div>
+   376→        )}
+   377→      </div>
+   378→
+   379→      <Separator />
+   380→
+   381→      {/* Labour Entries */}
+   382→      <div>
+   383→        <div className="flex items-center gap-2 mb-3">
+   384→          <User className="h-4 w-4 text-muted-foreground" />
+   385→          <h4 className="text-sm font-semibold">Labour Entries</h4>
+   386→        </div>
+   387→        {job.labourEntries.length === 0 ? (
+   388→          <p className="text-sm text-muted-foreground pl-6">No labour entries.</p>
+   389→        ) : (
+   390→          <div className="rounded-lg border bg-background overflow-hidden">
+   391→            <Table>
+   392→              <TableHeader>
+   393→                <TableRow className="bg-muted/50 hover:bg-muted/50">
+   394→                  <TableHead className="text-xs font-semibold uppercase tracking-wider">
+   395→                    Staff
+   396→                  </TableHead>
+   397→                  <TableHead className="text-xs font-semibold uppercase tracking-wider">
+   398→                    Date
+   399→                  </TableHead>
+   400→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-center">
+   401→                    Hours
+   402→                  </TableHead>
+   403→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">
+   404→                    Rate
+   405→                  </TableHead>
+   406→                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">
+   407→                    Total
+   408→                  </TableHead>
+   409→                </TableRow>
+   410→              </TableHeader>
+   411→              <TableBody>
+   412→                {job.labourEntries.map((entry) => (
+   413→                  <TableRow key={entry.id}>
+   414→                    <TableCell className="font-medium text-sm">
+   415→                      {entry.staff.name}
+   416→                    </TableCell>
+   417→                    <TableCell className="text-sm text-muted-foreground">
+   418→                      {formatDate(entry.date)}
+   419→                    </TableCell>
+   420→                    <TableCell className="text-center tabular-nums">
+   421→                      {entry.hours}
+   422→                    </TableCell>
+   423→                    <TableCell className="text-right tabular-nums text-sm">
+   424→                      {formatCurrency(entry.rate)}/hr
+   425→                    </TableCell>
+   426→                    <TableCell className="text-right tabular-nums text-sm font-medium">
+   427→                      {formatCurrency(entry.hours * entry.rate)}
+   428→                    </TableCell>
+   429→                  </TableRow>
+   430→                ))}
+   431→                <TableRow className="bg-muted/30 hover:bg-muted/30">
+   432→                  <TableCell colSpan={2} className="text-right text-sm font-semibold">
+   433→                    Labour Total ({labourHoursTotal}h)
+   434→                  </TableCell>
+   435→                  <TableCell colSpan={3} className="text-right tabular-nums text-sm font-bold">
+   436→                    {formatCurrency(labourTotal)}
+   437→                  </TableCell>
+   438→                </TableRow>
+   439→              </TableBody>
+   440→            </Table>
+   441→          </div>
+   442→        )}
+   443→      </div>
+   444→    </div>
+   445→  );
+   446→}
+   447→
+   448→// ---------------------------------------------------------------------------
+   449→// Main Component
+   450→// ---------------------------------------------------------------------------
+   451→
+   452→export function JobCardsPage() {
+   453→  const { toast } = useToast();
+   454→
+   455→  // Data state
+   456→  const [jobCards, setJobCards] = useState<JobCard[]>([]);
+   457→  const [customers, setCustomers] = useState<Customer[]>([]);
+   458→  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+   459→  const [staff, setStaff] = useState<Staff[]>([]);
+   460→  const [loading, setLoading] = useState(true);
+   461→
+   462→  // UI state
+   463→  const [searchQuery, setSearchQuery] = useState('');
+   464→  const [statusFilter, setStatusFilter] = useState('ALL');
+   465→  const [expandedId, setExpandedId] = useState<string | null>(null);
+   466→
+   467→  // Create/Edit dialog state
+   468→  const [formDialogOpen, setFormDialogOpen] = useState(false);
+   469→  const [editingJob, setEditingJob] = useState<JobCard | null>(null);
+   470→  const [formData, setFormData] = useState<JobCardFormData>(EMPTY_FORM);
+   471→  const [submitting, setSubmitting] = useState(false);
+   472→
+   473→  // Status change dialog state
+   474→  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+   475→  const [statusChangingJob, setStatusChangingJob] = useState<JobCard | null>(null);
+   476→  const [newStatus, setNewStatus] = useState<string>('');
+   477→  const [statusSubmitting, setStatusSubmitting] = useState(false);
+   478→
+   479→  // -------------------------------------------------------------------------
+   480→  // Data fetching
+   481→  // -------------------------------------------------------------------------
+   482→
+   483→  const fetchJobCards = useCallback(async () => {
+   484→    try {
+   485→      const res = await fetch('/api/job-cards');
+   486→      if (!res.ok) throw new Error(`Failed to fetch job cards (${res.status})`);
+   487→      const data: JobCard[] = await res.json();
+   488→      setJobCards(data);
+   489→    } catch (err) {
+   490→      toast({
+   491→        title: 'Error',
+   492→        description: err instanceof Error ? err.message : 'Failed to load job cards',
+   493→        variant: 'destructive',
+   494→      });
+   495→    }
+   496→  }, [toast]);
+   497→
+   498→  const fetchCustomers = useCallback(async () => {
+   499→    try {
+   500→      const res = await fetch('/api/customers');
+   501→      if (!res.ok) throw new Error(`Failed to fetch customers (${res.status})`);
+   502→      const data: Customer[] = await res.json();
+   503→      setCustomers(data);
+   504→    } catch (err) {
+   505→      toast({
+   506→        title: 'Error',
+   507→        description: err instanceof Error ? err.message : 'Failed to load customers',
+   508→        variant: 'destructive',
+   509→      });
+   510→    }
+   511→  }, [toast]);
+   512→
+   513→  const fetchVehicles = useCallback(async () => {
+   514→    try {
+   515→      const res = await fetch('/api/vehicles');
+   516→      if (!res.ok) throw new Error(`Failed to fetch vehicles (${res.status})`);
+   517→      const data: Vehicle[] = await res.json();
+   518→      setVehicles(data);
+   519→    } catch (err) {
+   520→      toast({
+   521→        title: 'Error',
+   522→        description: err instanceof Error ? err.message : 'Failed to load vehicles',
+   523→        variant: 'destructive',
+   524→      });
+   525→    }
+   526→  }, [toast]);
+   527→
+   528→  const fetchStaff = useCallback(async () => {
+   529→    try {
+   530→      const res = await fetch('/api/staff');
+   531→      if (!res.ok) throw new Error(`Failed to fetch staff (${res.status})`);
+   532→      const data: Staff[] = await res.json();
+   533→      setStaff(data);
+   534→    } catch (err) {
+   535→      toast({
+   536→        title: 'Error',
+   537→        description: err instanceof Error ? err.message : 'Failed to load staff',
+   538→        variant: 'destructive',
+   539→      });
+   540→    }
+   541→  }, [toast]);
+   542→
+   543→  const fetchAll = useCallback(async () => {
+   544→    setLoading(true);
+   545→    await Promise.all([fetchJobCards(), fetchCustomers(), fetchVehicles(), fetchStaff()]);
+   546→    setLoading(false);
+   547→  }, [fetchJobCards, fetchCustomers, fetchVehicles, fetchStaff]);
+   548→
+   549→  useEffect(() => {
+   550→    fetchAll();
+   551→  }, [fetchAll]);
+   552→
+   553→  // -------------------------------------------------------------------------
+   554→  // Filtering
+   555→  // -------------------------------------------------------------------------
+   556→
+   557→  const filteredJobCards = jobCards.filter((job) => {
+   558→    // Status filter
+   559→    if (statusFilter !== 'ALL' && job.status !== statusFilter) {
+   560→      return false;
+   561→    }
+   562→
+   563→    // Search filter
+   564→    if (!searchQuery.trim()) return true;
+   565→    const q = searchQuery.toLowerCase();
+   566→    return (
+   567→      job.jobNumber.toLowerCase().includes(q) ||
+   568→      job.customer.name.toLowerCase().includes(q) ||
+   569→      job.description.toLowerCase().includes(q) ||
+   570→      job.technician?.name?.toLowerCase().includes(q) ||
+   571→      job.vehicle.plateNumber.toLowerCase().includes(q) ||
+   572→      `${job.vehicle.make} ${job.vehicle.model}`.toLowerCase().includes(q)
+   573→    );
+   574→  });
+   575→
+   576→  // Vehicles filtered by the currently selected customer
+   577→  const filteredVehicles = formData.customerId
+   578→    ? vehicles.filter((v) => v.customerId === formData.customerId)
+   579→    : vehicles;
+   580→
+   581→  // -------------------------------------------------------------------------
+   582→  // CRUD handlers
+   583→  // -------------------------------------------------------------------------
+   584→
+   585→  function openCreateDialog() {
+   586→    setEditingJob(null);
+   587→    setFormData(EMPTY_FORM);
+   588→    setFormDialogOpen(true);
+   589→  }
+   590→
+   591→  function openEditDialog(job: JobCard) {
+   592→    setEditingJob(job);
+   593→    setFormData({
+   594→      customerId: job.customerId,
+   595→      vehicleId: job.vehicleId,
+   596→      technicianId: job.technicianId || '',
+   597→      description: job.description,
+   598→      priority: String(job.priority ?? 2),
+   599→      estimatedCost: job.estimatedCost ? String(job.estimatedCost) : '',
+   600→    });
+   601→    setFormDialogOpen(true);
+   602→  }
+   603→
+   604→  function openStatusDialog(job: JobCard) {
+   605→    setStatusChangingJob(job);
+   606→    setNewStatus(job.status);
+   607→    setStatusDialogOpen(true);
+   608→  }
+   609→
+   610→  async function handleFormSubmit(e: React.FormEvent) {
+   611→    e.preventDefault();
+   612→
+   613→    if (!formData.customerId || !formData.vehicleId || !formData.description.trim()) {
+   614→      toast({
+   615→        title: 'Validation Error',
+   616→        description: 'Customer, vehicle, and description are required fields.',
+   617→        variant: 'destructive',
+   618→      });
+   619→      return;
+   620→    }
+   621→
+   622→    setSubmitting(true);
+   623→    try {
+   624→      const isEdit = editingJob !== null;
+   625→      const payload: Record<string, unknown> = {
+   626→        customerId: formData.customerId,
+   627→        vehicleId: formData.vehicleId,
+   628→        description: formData.description.trim(),
+   629→      };
+   630→
+   631→      if (formData.technicianId) payload.technicianId = formData.technicianId;
+   632→      if (formData.priority) payload.priority = Number(formData.priority);
+   633→      if (formData.estimatedCost) payload.estimatedCost = Number(formData.estimatedCost);
+   634→
+   635→      if (isEdit) {
+   636→        payload.id = editingJob!.id;
+   637→      }
+   638→
+   639→      const res = await fetch('/api/job-cards', {
+   640→        method: isEdit ? 'PUT' : 'POST',
+   641→        headers: { 'Content-Type': 'application/json' },
+   642→        body: JSON.stringify(payload),
+   643→      });
+   644→
+   645→      if (!res.ok) throw new Error(`Failed to ${isEdit ? 'update' : 'create'} job card`);
+   646→
+   647→      toast({
+   648→        title: isEdit ? 'Job Card Updated' : 'Job Card Created',
+   649→        description: `${isEdit ? editingJob!.jobNumber : 'New job card'} has been ${isEdit ? 'updated' : 'created'} successfully.`,
+   650→      });
+   651→
+   652→      setFormDialogOpen(false);
+   653→      await fetchJobCards();
+   654→    } catch (err) {
+   655→      toast({
+   656→        title: 'Error',
+   657→        description: err instanceof Error ? err.message : `Failed to ${editingJob ? 'update' : 'create'} job card`,
+   658→        variant: 'destructive',
+   659→      });
+   660→    } finally {
+   661→      setSubmitting(false);
+   662→    }
+   663→  }
+   664→
+   665→  async function handleStatusChange(e: React.FormEvent) {
+   666→    e.preventDefault();
+   667→    if (!statusChangingJob || !newStatus) return;
+   668→
+   669→    setStatusSubmitting(true);
+   670→    try {
+   671→      const res = await fetch('/api/job-cards', {
+   672→        method: 'PUT',
+   673→        headers: { 'Content-Type': 'application/json' },
+   674→        body: JSON.stringify({
+   675→          id: statusChangingJob.id,
+   676→          status: newStatus,
+   677→        }),
+   678→      });
+   679→
+   680→      if (!res.ok) throw new Error('Failed to update job status');
+   681→
+   682→      toast({
+   683→        title: 'Status Updated',
+   684→        description: `${statusChangingJob.jobNumber} status changed to ${formatStatusLabel(newStatus as JobStatus)}.`,
+   685→      });
+   686→
+   687→      setStatusDialogOpen(false);
+   688→      setStatusChangingJob(null);
+   689→      setNewStatus('');
+   690→      await fetchJobCards();
+   691→    } catch (err) {
+   692→      toast({
+   693→        title: 'Error',
+   694→        description: err instanceof Error ? err.message : 'Failed to update status',
+   695→        variant: 'destructive',
+   696→      });
+   697→    } finally {
+   698→      setStatusSubmitting(false);
+   699→    }
+   700→  }
+   701→
+   702→  async function handleDelete(job: JobCard) {
+   703→    if (!confirm(`Are you sure you want to delete ${job.jobNumber}? This action cannot be undone.`)) {
+   704→      return;
+   705→    }
+   706→
+   707→    try {
+   708→      const res = await fetch(`/api/job-cards?id=${job.id}`, { method: 'DELETE' });
+   709→      if (!res.ok) throw new Error(`Failed to delete job card (${res.status})`);
+   710→
+   711→      toast({
+   712→        title: 'Job Card Deleted',
+   713→        description: `${job.jobNumber} has been removed.`,
+   714→      });
+   715→
+   716→      if (expandedId === job.id) {
+   717→        setExpandedId(null);
+   718→      }
+   719→
+   720→      await fetchJobCards();
+   721→    } catch (err) {
+   722→      toast({
+   723→        title: 'Error',
+   724→        description: err instanceof Error ? err.message : 'Failed to delete job card',
+   725→        variant: 'destructive',
+   726→      });
+   727→    }
+   728→  }
+   729→
+   730→  function toggleExpand(id: string) {
+   731→    setExpandedId((prev) => (prev === id ? null : id));
+   732→  }
+   733→
+   734→  function updateFormField(field: keyof JobCardFormData, value: string) {
+   735→    setFormData((prev) => {
+   736→      const updated = { ...prev, [field]: value };
+   737→      // Reset vehicle when customer changes
+   738→      if (field === 'customerId') {
+   739→        updated.vehicleId = '';
+   740→      }
+   741→      return updated;
+   742→    });
+   743→  }
+   744→
+   745→  // -------------------------------------------------------------------------
+   746→  // Render: Loading
+   747→  // -------------------------------------------------------------------------
+   748→
+   749→  if (loading) {
+   750→    return (
+   751→      <div className="space-y-6">
+   752→        {/* Header skeleton */}
+   753→        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   754→          <div className="space-y-2">
+   755→            <Skeleton className="h-7 w-56" />
+   756→            <Skeleton className="h-4 w-80" />
+   757→          </div>
+   758→          <Skeleton className="h-10 w-44" />
+   759→        </div>
+   760→        {/* Filter bar skeleton */}
+   761→        <div className="flex flex-col sm:flex-row gap-3">
+   762→          <Skeleton className="h-10 w-full sm:max-w-xs" />
+   763→          <Skeleton className="h-10 w-full sm:w-48" />
+   764→        </div>
+   765→        {/* Table skeleton */}
+   766→        <TableSkeleton />
+   767→      </div>
+   768→    );
+   769→  }
+   770→
+   771→  // -------------------------------------------------------------------------
+   772→  // Render: Main
+   773→  // -------------------------------------------------------------------------
+   774→
+   775→  return (
+   776→    <div className="space-y-6">
+   777→      {/* ----------------------------------------------------------------- */}
+   778→      {/* Header                                                            */}
+   779→      {/* ----------------------------------------------------------------- */}
+   780→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   781→        <div>
+   782→          <h1 className="text-2xl font-bold tracking-tight">Job Card Management</h1>
+   783→          <p className="text-muted-foreground text-sm mt-1">
+   784→            Create, track, and manage all workshop job cards and their progress.
+   785→          </p>
+   786→        </div>
+   787→        <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+   788→          <DialogTrigger asChild>
+   789→            <Button onClick={openCreateDialog} className="gap-2">
+   790→              <Plus className="h-4 w-4" />
+   791→              Create Job Card
+   792→            </Button>
+   793→          </DialogTrigger>
+   794→
+   795→          {/* ------------------------------------------------------------- */}
+   796→          {/* Create / Edit Dialog                                           */}
+   797→          {/* ------------------------------------------------------------- */}
+   798→          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+   799→            <form onSubmit={handleFormSubmit}>
+   800→              <DialogHeader>
+   801→                <DialogTitle>
+   802→                  {editingJob ? 'Edit Job Card' : 'Create Job Card'}
+   803→                </DialogTitle>
+   804→                <DialogDescription>
+   805→                  {editingJob
+   806→                    ? `Update details for ${editingJob.jobNumber}.`
+   807→                    : 'Fill in the details to create a new job card.'}
+   808→                </DialogDescription>
+   809→              </DialogHeader>
+   810→              <Separator className="my-2" />
+   811→              <div className="grid gap-4 py-2">
+   812→                {/* Customer */}
+   813→                <div className="grid gap-2">
+   814→                  <label htmlFor="jc-customer" className="text-sm font-medium">
+   815→                    Customer <span className="text-destructive">*</span>
+   816→                  </label>
+   817→                  <Select
+   818→                    value={formData.customerId}
+   819→                    onValueChange={(val) => updateFormField('customerId', val)}
+   820→                    disabled={submitting}
+   821→                  >
+   822→                    <SelectTrigger className="w-full" id="jc-customer">
+   823→                      <SelectValue placeholder="Select a customer" />
+   824→                    </SelectTrigger>
+   825→                    <SelectContent>
+   826→                      {customers.map((c) => (
+   827→                        <SelectItem key={c.id} value={c.id}>
+   828→                          <div className="flex items-center gap-2">
+   829→                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+   830→                            {c.name}
+   831→                          </div>
+   832→                        </SelectItem>
+   833→                      ))}
+   834→                    </SelectContent>
+   835→                  </Select>
+   836→                </div>
+   837→
+   838→                {/* Vehicle */}
+   839→                <div className="grid gap-2">
+   840→                  <label htmlFor="jc-vehicle" className="text-sm font-medium">
+   841→                    Vehicle <span className="text-destructive">*</span>
+   842→                  </label>
+   843→                  <Select
+   844→                    value={formData.vehicleId}
+   845→                    onValueChange={(val) => updateFormField('vehicleId', val)}
+   846→                    disabled={submitting || !formData.customerId}
+   847→                  >
+   848→                    <SelectTrigger className="w-full" id="jc-vehicle">
+   849→                      <SelectValue
+   850→                        placeholder={
+   851→                          formData.customerId
+   852→                            ? 'Select a vehicle'
+   853→                            : 'Select a customer first'
+   854→                        }
+   855→                      />
+   856→                    </SelectTrigger>
+   857→                    <SelectContent>
+   858→                      {filteredVehicles.length === 0 ? (
+   859→                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+   860→                          No vehicles found for this customer.
+   861→                        </div>
+   862→                      ) : (
+   863→                        filteredVehicles.map((v) => (
+   864→                          <SelectItem key={v.id} value={v.id}>
+   865→                            <div className="flex items-center gap-2">
+   866→                              <Car className="h-3.5 w-3.5 text-muted-foreground" />
+   867→                              {v.make} {v.model} ({v.plateNumber})
+   868→                            </div>
+   869→                          </SelectItem>
+   870→                        ))
+   871→                      )}
+   872→                    </SelectContent>
+   873→                  </Select>
+   874→                </div>
+   875→
+   876→                {/* Technician */}
+   877→                <div className="grid gap-2">
+   878→                  <label htmlFor="jc-technician" className="text-sm font-medium">
+   879→                    Technician
+   880→                  </label>
+   881→                  <Select
+   882→                    value={formData.technicianId}
+   883→                    onValueChange={(val) => updateFormField('technicianId', val)}
+   884→                    disabled={submitting}
+   885→                  >
+   886→                    <SelectTrigger className="w-full" id="jc-technician">
+   887→                      <SelectValue placeholder="Select a technician (optional)" />
+   888→                    </SelectTrigger>
+   889→                    <SelectContent>
+   890→                      {staff.map((s) => (
+   891→                        <SelectItem key={s.id} value={s.id}>
+   892→                          <div className="flex items-center gap-2">
+   893→                            <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+   894→                            {s.name}
+   895→                          </div>
+   896→                        </SelectItem>
+   897→                      ))}
+   898→                    </SelectContent>
+   899→                  </Select>
+   900→                </div>
+   901→
+   902→                {/* Description */}
+   903→                <div className="grid gap-2">
+   904→                  <label htmlFor="jc-description" className="text-sm font-medium">
+   905→                    Description <span className="text-destructive">*</span>
+   906→                  </label>
+   907→                  <Textarea
+   908→                    id="jc-description"
+   909→                    placeholder="Describe the work to be done..."
+   910→                    value={formData.description}
+   911→                    onChange={(e) => updateFormField('description', e.target.value)}
+   912→                    required
+   913→                    disabled={submitting}
+   914→                    rows={3}
+   915→                  />
+   916→                </div>
+   917→
+   918→                {/* Priority & Estimated Cost */}
+   919→                <div className="grid grid-cols-2 gap-4">
+   920→                  {/* Priority */}
+   921→                  <div className="grid gap-2">
+   922→                    <label htmlFor="jc-priority" className="text-sm font-medium">
+   923→                      Priority
+   924→                    </label>
+   925→                    <Select
+   926→                      value={formData.priority}
+   927→                      onValueChange={(val) => updateFormField('priority', val)}
+   928→                      disabled={submitting}
+   929→                    >
+   930→                      <SelectTrigger className="w-full" id="jc-priority">
+   931→                        <SelectValue placeholder="Select priority" />
+   932→                      </SelectTrigger>
+   933→                      <SelectContent>
+   934→                        <SelectItem value="1">Low</SelectItem>
+   935→                        <SelectItem value="2">Medium</SelectItem>
+   936→                        <SelectItem value="3">High</SelectItem>
+   937→                      </SelectContent>
+   938→                    </Select>
+   939→                  </div>
+   940→
+   941→                  {/* Estimated Cost */}
+   942→                  <div className="grid gap-2">
+   943→                    <label htmlFor="jc-cost" className="text-sm font-medium">
+   944→                      Estimated Cost
+   945→                    </label>
+   946→                    <Input
+   947→                      id="jc-cost"
+   948→                      type="number"
+   949→                      min="0"
+   950→                      step="0.01"
+   951→                      placeholder="0.00"
+   952→                      value={formData.estimatedCost}
+   953→                      onChange={(e) => updateFormField('estimatedCost', e.target.value)}
+   954→                      disabled={submitting}
+   955→                    />
+   956→                  </div>
+   957→                </div>
+   958→              </div>
+   959→              <DialogFooter className="pt-2">
+   960→                <Button
+   961→                  type="button"
+   962→                  variant="outline"
+   963→                  onClick={() => setFormDialogOpen(false)}
+   964→                  disabled={submitting}
+   965→                >
+   966→                  Cancel
+   967→                </Button>
+   968→                <Button type="submit" disabled={submitting}>
+   969→                  {submitting
+   970→                    ? 'Saving...'
+   971→                    : editingJob
+   972→                      ? 'Update Job Card'
+   973→                      : 'Create Job Card'}
+   974→                </Button>
+   975→              </DialogFooter>
+   976→            </form>
+   977→          </DialogContent>
+   978→        </Dialog>
+   979→      </div>
+   980→
+   981→      {/* ----------------------------------------------------------------- */}
+   982→      {/* Filter bar                                                        */}
+   983→      {/* ----------------------------------------------------------------- */}
+   984→      <div className="flex flex-col sm:flex-row gap-3">
+   985→        <div className="relative flex-1 sm:max-w-xs">
+   986→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+   987→          <Input
+   988→            placeholder="Search job #, customer, vehicle..."
+   989→            value={searchQuery}
+   990→            onChange={(e) => setSearchQuery(e.target.value)}
+   991→            className="pl-9"
+   992→          />
+   993→        </div>
+   994→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   995→          <SelectTrigger className="w-full sm:w-48">
+   996→            <SelectValue placeholder="All Statuses" />
+   997→          </SelectTrigger>
+   998→          <SelectContent>
+   999→            {STATUS_FILTER_OPTIONS.map((opt) => (
+  1000→              <SelectItem key={opt.value} value={opt.value}>
+  1001→                {opt.label}
+  1002→              </SelectItem>
+  1003→            ))}
+  1004→          </SelectContent>
+  1005→        </Select>
+  1006→        <Button
+  1007→          variant="outline"
+  1008→          size="icon"
+  1009→          className="shrink-0"
+  1010→          onClick={fetchAll}
+  1011→          aria-label="Refresh data"
+  1012→        >
+  1013→          <RefreshCw className="h-4 w-4" />
+  1014→        </Button>
+  1015→      </div>
+  1016→
+  1017→      {/* ----------------------------------------------------------------- */}
+  1018→      {/* Job Cards Table                                                   */}
+  1019→      {/* ----------------------------------------------------------------- */}
+  1020→      <Card>
+  1021→        <CardContent className="p-0">
+  1022→          <Table>
+  1023→            <TableHeader>
+  1024→              <TableRow>
+  1025→                <TableHead className="w-10"></TableHead>
+  1026→                <TableHead className="min-w-[120px]">Job #</TableHead>
+  1027→                <TableHead>
+  1028→                  <div className="flex items-center gap-1.5">
+  1029→                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+  1030→                    Customer
+  1031→                  </div>
+  1032→                </TableHead>
+  1033→                <TableHead>
+  1034→                  <div className="flex items-center gap-1.5">
+  1035→                    <Car className="h-3.5 w-3.5 text-muted-foreground" />
+  1036→                    Vehicle
+  1037→                  </div>
+  1038→                </TableHead>
+  1039→                <TableHead className="hidden xl:table-cell">Description</TableHead>
+  1040→                <TableHead className="hidden md:table-cell">
+  1041→                  <div className="flex items-center gap-1.5">
+  1042→                    <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+  1043→                    Technician
+  1044→                  </div>
+  1045→                </TableHead>
+  1046→                <TableHead>Status</TableHead>
+  1047→                <TableHead className="hidden lg:table-cell">Priority</TableHead>
+  1048→                <TableHead className="hidden sm:table-cell text-right">Est. Cost</TableHead>
+  1049→                <TableHead className="text-right">Actions</TableHead>
+  1050→              </TableRow>
+  1051→            </TableHeader>
+  1052→            <TableBody>
+  1053→              {filteredJobCards.length === 0 ? (
+  1054→                <TableRow>
+  1055→                  <TableCell colSpan={10} className="h-32 text-center">
+  1056→                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+  1057→                      <ClipboardList className="h-8 w-8 opacity-40" />
+  1058→                      <p className="text-sm font-medium">
+  1059→                        {searchQuery.trim() || statusFilter !== 'ALL'
+  1060→                          ? 'No job cards match your filters.'
+  1061→                          : 'No job cards found.'}
+  1062→                      </p>
+  1063→                      {!searchQuery.trim() && statusFilter === 'ALL' && (
+  1064→                        <p className="text-xs">
+  1065→                          Click &quot;Create Job Card&quot; to get started.
+  1066→                        </p>
+  1067→                      )}
+  1068→                    </div>
+  1069→                  </TableCell>
+  1070→                </TableRow>
+  1071→              ) : (
+  1072→                filteredJobCards.map((job) => {
+  1073→                  const isExpanded = expandedId === job.id;
+  1074→                  return (
+  1075→                    <Fragment key={job.id}>
+  1076→                      <TableRow
+  1077→                        className="cursor-pointer"
+  1078→                        onClick={() => toggleExpand(job.id)}
+  1079→                      >
+  1080→                        {/* Expand toggle */}
+  1081→                        <TableCell className="w-10 p-2">
+  1082→                          {isExpanded ? (
+  1083→                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+  1084→                          ) : (
+  1085→                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+  1086→                          )}
+  1087→                        </TableCell>
+  1088→
+  1089→                        {/* Job # */}
+  1090→                        <TableCell className="font-semibold font-mono text-sm">
+  1091→                          {job.jobNumber}
+  1092→                        </TableCell>
+  1093→
+  1094→                        {/* Customer */}
+  1095→                        <TableCell className="font-medium">{job.customer.name}</TableCell>
+  1096→
+  1097→                        {/* Vehicle */}
+  1098→                        <TableCell>
+  1099→                          <div>
+  1100→                            <span className="text-sm font-medium">
+  1101→                              {job.vehicle.make} {job.vehicle.model}
+  1102→                            </span>
+  1103→                            <span className="ml-2 text-xs text-muted-foreground font-mono">
+  1104→                              {job.vehicle.plateNumber}
+  1105→                            </span>
+  1106→                          </div>
+  1107→                        </TableCell>
+  1108→
+  1109→                        {/* Description (hidden on small) */}
+  1110→                        <TableCell className="hidden xl:table-cell max-w-[200px] truncate text-sm text-muted-foreground">
+  1111→                          {job.description}
+  1112→                        </TableCell>
+  1113→
+  1114→                        {/* Technician (hidden on small) */}
+  1115→                        <TableCell className="hidden md:table-cell text-sm">
+  1116→                          {job.technician?.name || '—'}
+  1117→                        </TableCell>
+  1118→
+  1119→                        {/* Status */}
+  1120→                        <TableCell>
+  1121→                          <Badge className={STATUS_BADGE_CLASSES[job.status]}>
+  1122→                            {formatStatusLabel(job.status)}
+  1123→                          </Badge>
+  1124→                        </TableCell>
+  1125→
+  1126→                        {/* Priority (hidden on small) */}
+  1127→                        <TableCell className="hidden lg:table-cell">
+  1128→                          {getPriorityBadge(job.priority)}
+  1129→                        </TableCell>
+  1130→
+  1131→                        {/* Estimated Cost (hidden on mobile) */}
+  1132→                        <TableCell className="hidden sm:table-cell text-right tabular-nums text-sm">
+  1133→                          {job.estimatedCost ? formatCurrency(job.estimatedCost) : '—'}
+  1134→                        </TableCell>
+  1135→
+  1136→                        {/* Actions */}
+  1137→                        <TableCell className="text-right">
+  1138→                          <div
+  1139→                            className="flex items-center justify-end gap-1"
+  1140→                            onClick={(e) => e.stopPropagation()}
+  1141→                          >
+  1142→                            <Button
+  1143→                              variant="ghost"
+  1144→                              size="icon"
+  1145→                              className="h-8 w-8"
+  1146→                              onClick={() => openStatusDialog(job)}
+  1147→                              aria-label={`Change status of ${job.jobNumber}`}
+  1148→                            >
+  1149→                              <Eye className="h-4 w-4" />
+  1150→                            </Button>
+  1151→                            <Button
+  1152→                              variant="ghost"
+  1153→                              size="icon"
+  1154→                              className="h-8 w-8"
+  1155→                              onClick={() => openEditDialog(job)}
+  1156→                              aria-label={`Edit ${job.jobNumber}`}
+  1157→                            >
+  1158→                              <Edit className="h-4 w-4" />
+  1159→                            </Button>
+  1160→                            <Button
+  1161→                              variant="ghost"
+  1162→                              size="icon"
+  1163→                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+  1164→                              onClick={() => handleDelete(job)}
+  1165→                              aria-label={`Delete ${job.jobNumber}`}
+  1166→                            >
+  1167→                              <Trash2 className="h-4 w-4" />
+  1168→                            </Button>
+  1169→                          </div>
+  1170→                        </TableCell>
+  1171→                      </TableRow>
+  1172→
+  1173→                      {/* Expandable Detail Row */}
+  1174→                      {isExpanded && (
+  1175→                        <TableRow key={`${job.id}-detail`}>
+  1176→                          <TableCell colSpan={10} className="p-0 border-b">
+  1177→                            <JobDetailPanel job={job} />
+  1178→                          </TableCell>
+  1179→                        </TableRow>
+  1180→                      )}
+  1181→                    </Fragment>
+  1182→                  );
+  1183→                })
+  1184→              )}
+  1185→            </TableBody>
+  1186→          </Table>
+  1187→        </CardContent>
+  1188→      </Card>
+  1189→
+  1190→      {/* ----------------------------------------------------------------- */}
+  1191→      {/* Status Change Dialog                                              */}
+  1192→      {/* ----------------------------------------------------------------- */}
+  1193→      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+  1194→        <DialogContent className="sm:max-w-md">
+  1195→          <form onSubmit={handleStatusChange}>
+  1196→            <DialogHeader>
+  1197→              <DialogTitle>Change Job Status</DialogTitle>
+  1198→              <DialogDescription>
+  1199→                Update the status for{' '}
+  1200→                <span className="font-semibold text-foreground">
+  1201→                  {statusChangingJob?.jobNumber}
+  1202→                </span>
+  1203→                .
+  1204→              </DialogDescription>
+  1205→            </DialogHeader>
+  1206→            <Separator className="my-2" />
+  1207→            <div className="py-4 space-y-4">
+  1208→              {/* Current Status */}
+  1209→              <div className="flex items-center gap-3">
+  1210→                <span className="text-sm font-medium text-muted-foreground">
+  1211→                  Current Status:
+  1212→                </span>
+  1213→                {statusChangingJob && (
+  1214→                  <Badge className={STATUS_BADGE_CLASSES[statusChangingJob.status]}>
+  1215→                    {formatStatusLabel(statusChangingJob.status)}
+  1216→                  </Badge>
+  1217→                )}
+  1218→              </div>
+  1219→
+  1220→              {/* New Status Select */}
+  1221→              <div className="grid gap-2">
+  1222→                <label htmlFor="status-select" className="text-sm font-medium">
+  1223→                  New Status
+  1224→                </label>
+  1225→                <Select
+  1226→                  value={newStatus}
+  1227→                  onValueChange={setNewStatus}
+  1228→                  disabled={statusSubmitting}
+  1229→                >
+  1230→                  <SelectTrigger className="w-full" id="status-select">
+  1231→                    <SelectValue placeholder="Select new status" />
+  1232→                  </SelectTrigger>
+  1233→                  <SelectContent>
+  1234→                    {STATUS_OPTIONS.map((opt) => (
+  1235→                      <SelectItem key={opt.value} value={opt.value}>
+  1236→                        {opt.label}
+  1237→                      </SelectItem>
+  1238→                    ))}
+  1239→                  </SelectContent>
+  1240→                </Select>
+  1241→              </div>
+  1242→
+  1243→              {/* Job Summary */}
+  1244→              {statusChangingJob && (
+  1245→                <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+  1246→                  <div className="flex justify-between">
+  1247→                    <span className="text-muted-foreground">Customer:</span>
+  1248→                    <span className="font-medium">{statusChangingJob.customer.name}</span>
+  1249→                  </div>
+  1250→                  <div className="flex justify-between">
+  1251→                    <span className="text-muted-foreground">Vehicle:</span>
+  1252→                    <span className="font-medium">
+  1253→                      {statusChangingJob.vehicle.make} {statusChangingJob.vehicle.model}
+  1254→                    </span>
+  1255→                  </div>
+  1256→                  <div className="flex justify-between">
+  1257→                    <span className="text-muted-foreground">Priority:</span>
+  1258→                    <span>{getPriorityLabel(statusChangingJob.priority)}</span>
+  1259→                  </div>
+  1260→                  {statusChangingJob.estimatedCost > 0 && (
+  1261→                    <div className="flex justify-between">
+  1262→                      <span className="text-muted-foreground">Est. Cost:</span>
+  1263→                      <span className="tabular-nums">
+  1264→                        {formatCurrency(statusChangingJob.estimatedCost)}
+  1265→                      </span>
+  1266→                    </div>
+  1267→                  )}
+  1268→                  {statusChangingJob.actualCost > 0 && (
+  1269→                    <div className="flex justify-between">
+  1270→                      <span className="text-muted-foreground">Actual Cost:</span>
+  1271→                      <span className="tabular-nums font-medium">
+  1272→                        {formatCurrency(statusChangingJob.actualCost)}
+  1273→                      </span>
+  1274→                    </div>
+  1275→                  )}
+  1276→                </div>
+  1277→              )}
+  1278→            </div>
+  1279→            <DialogFooter className="pt-2">
+  1280→              <Button
+  1281→                type="button"
+  1282→                variant="outline"
+  1283→                onClick={() => setStatusDialogOpen(false)}
+  1284→                disabled={statusSubmitting}
+  1285→              >
+  1286→                Cancel
+  1287→              </Button>
+  1288→              <Button type="submit" disabled={statusSubmitting || !newStatus}>
+  1289→                {statusSubmitting ? 'Updating...' : 'Update Status'}
+  1290→              </Button>
+  1291→            </DialogFooter>
+  1292→          </form>
+  1293→        </DialogContent>
+  1294→      </Dialog>
+  1295→    </div>
+  1296→  );
+  1297→}
