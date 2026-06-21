@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== User Roles & Staff ====================
+
+enum Role {
+  ADMIN
+  MANAGER
+  SERVICE_ADVISOR
+  CASHIER
+  STOREKEEPER
+  TECHNICIAN
+}
+
+model Staff {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String
+  role      Role
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedJobs JobCard[]
+  labourEntries LabourEntry[]
+}
+
+// ==================== Customer Management ====================
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles    Vehicle[]
+  jobCards    JobCard[]
+  invoices    Invoice[]
+  reminders   ServiceReminder[]
+}
+
+model Vehicle {
+  id          String   @id @default(cuid())
+  customerId  String
+  make        String
+  model       String
+  year        Int
+  color       String?
+  plateNumber String   @unique
+  vin         String?
+  mileage     Int      @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobCards   JobCard[]
+  reminders  ServiceReminder[]
+}
+
+// ==================== Job Card Management ====================
+
+enum JobStatus {
+  PENDING
+  IN_PROGRESS
+  WAITING_PARTS
+  COMPLETED
+  APPROVED
+  INVOICED
+  CANCELLED
+}
+
+model JobCard {
+  id            String    @id @default(cuid())
+  jobNumber     String    @unique
+  customerId    String
+  vehicleId     String
+  technicianId String?
+  description   String
+  status        JobStatus @default(PENDING)
+  priority      Int       @default(0)
+  estimatedCost Float?
+  actualCost    Float?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  approvedAt    DateTime?
+  approvedBy    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer       Customer  @relation(fields: [customerId], references: [id])
+  vehicle        Vehicle   @relation(fields: [vehicleId], references: [id])
+  technician     Staff?    @relation(fields: [technicianId], references: [id])
+  tasks          JobTask[]
+  labourEntries  LabourEntry[]
+  partsUsed      PartsUsed[]
+  invoice        Invoice?
+}
+
+model JobTask {
+  id         String   @id @default(cuid())
+  jobCardId  String
+  taskName   String
+  completed  Boolean  @default(false)
+  laborHrs   Float?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  jobCard JobCard @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+}
+
+model LabourEntry {
+  id         String   @id @default(cuid())
+  jobCardId  String
+  staffId    String
+  hours      Float
+  rate       Float
+  date       DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  jobCard JobCard @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  staff    Staff    @relation(fields: [staffId], references: [id])
+}
+
+// ==================== Inventory Management ====================
+
+model SparePart {
+  id          String   @id @default(cuid())
+  partNumber  String   @unique
+  name        String
+  category    String
+  description String?
+  quantity    Int      @default(0)
+  minStock    Int      @default(5)
+  costPrice   Float
+  sellPrice   Float
+  supplierId  String?
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id])
+  usedInJobs PartsUsed[]
+  purchaseOrders PurchaseOrderItem[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String?
+  email     String?
+  phone     String
+  address   String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parts          SparePart[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model PartsUsed {
+  id          String   @id @default(cuid())
+  jobCardId   String
+  sparePartId String
+  quantity    Int
+  unitPrice   Float
+  createdAt   DateTime @default(now())
+
+  jobCard   JobCard   @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  sparePart SparePart @relation(fields: [sparePartId], references: [id])
+}
+
+enum POStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String   @id @default(cuid())
+  poNumber   String   @unique
+  supplierId String
+  status     POStatus @default(DRAFT)
+  totalAmount Float
+  orderedAt  DateTime @default(now())
+  receivedAt DateTime?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier  @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  sparePartId     String
+  quantity        Int
+  unitCost        Float
+  total           Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  sparePart     SparePart     @relation(fields: [sparePartId], references: [id])
+}
+
+// ==================== Billing & Invoicing ====================
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  invoiceNumber String       @unique
+  customerId  String
+  jobCardId   String?   @unique
+  status      InvoiceStatus @default(DRAFT)
+  subtotal    Float
+  tax         Float     @default(0)
+  discount    Float     @default(0)
+  total       Float
+  paidAmount  Float     @default(0)
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  jobCard    JobCard? @relation(fields: [jobCardId], references: [id])
+  payments   Payment[]
+  items      InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  amount      Float
+  method      String
+  reference   String?
+  paidAt      DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ==================== Service Reminders ====================
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  COMPLETED
+  FAILED
+}
+
+enum ReminderChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+model ServiceReminder {
+  id          String         @id @default(cuid())
+  customerId  String
+  vehicleId   String
+  type        String
+  description String
+  dueDate     DateTime
+  status      ReminderStatus @default(PENDING)
+  channel     ReminderChannel @default(SMS)
+  sentAt      DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id])
+}
