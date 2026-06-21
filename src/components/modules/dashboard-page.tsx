@@ -27,6 +27,7 @@ import {
 import { useAppStore, ROLE_LABELS, ROLE_COLORS, ROLE_ICONS, type UserRole } from '@/store/app-store';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -404,10 +405,11 @@ const MODULE_LABELS: Record<string, string> = {
   billing: 'Billing',
   reminders: 'Reminders',
   reports: 'Reports',
+  'user-management': 'User Mgmt',
 };
 
 const ROLE_MODULE_ACCESS: Record<string, string[]> = {
-  ADMIN: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Inventory', 'Billing', 'Reminders', 'Reports'],
+  ADMIN: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Inventory', 'Billing', 'Reminders', 'Reports', 'User Mgmt'],
   MANAGER: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing', 'Reminders', 'Reports'],
   SERVICE_ADVISOR: ['Dashboard', 'Customers', 'Job Cards', 'Workshop', 'Billing'],
   CASHIER: ['Dashboard', 'Customers', 'Billing'],
@@ -416,7 +418,7 @@ const ROLE_MODULE_ACCESS: Record<string, string[]> = {
 };
 
 const ROLE_MODULE_CREATE: Record<string, string[]> = {
-  ADMIN: ['Customers', 'Job Cards', 'Inventory', 'Billing', 'Reminders'],
+  ADMIN: ['Customers', 'Job Cards', 'Inventory', 'Billing', 'Reminders', 'User Mgmt'],
   MANAGER: ['Customers', 'Job Cards', 'Billing', 'Reminders'],
   SERVICE_ADVISOR: ['Customers', 'Job Cards'],
   CASHIER: ['Billing'],
@@ -439,6 +441,8 @@ function getInitials(name: string): string {
 
 function UserRolesSection({ staff }: { staff: StaffMember[] }) {
   const currentUser = useAppStore((s) => s.currentUser);
+  const setActivePage = useAppStore((s) => s.setActivePage);
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const roles: UserRole[] = ['ADMIN', 'MANAGER', 'SERVICE_ADVISOR', 'CASHIER', 'STOREKEEPER', 'TECHNICIAN'];
 
@@ -455,10 +459,23 @@ function UserRolesSection({ staff }: { staff: StaffMember[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          User Roles & Permissions
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            User Roles & Permissions
+          </CardTitle>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => setActivePage('user-management')}
+            >
+              <Shield className="h-3.5 w-3.5 mr-1.5" />
+              Manage Users
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

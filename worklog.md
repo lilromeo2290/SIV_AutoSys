@@ -1,26 +1,30 @@
+# Worklog
+
 ---
 Task ID: 1
 Agent: Super Z (Main)
-Task: Build complete Internal Management System (Operations System)
+Task: Implement User Management feature - Admin can create/delete users and assign roles & permissions
 
 Work Log:
-- Initialized fullstack dev environment
-- Designed and created Prisma schema with 15 models: Staff, Customer, Vehicle, JobCard, JobTask, LabourEntry, SparePart, Supplier, PartsUsed, PurchaseOrder, PurchaseOrderItem, Invoice, InvoiceItem, Payment, ServiceReminder
-- Pushed schema to SQLite database, fixed relation issues
-- Created seed script with comprehensive sample data (8 staff, 8 customers, 10 vehicles, 10 job cards, 12 spare parts, 3 suppliers, 6 invoices, 5 reminders, 3 POs)
-- Built Zustand store for SPA navigation state
-- Created 9 API routes: /api/dashboard, /api/customers, /api/vehicles, /api/job-cards, /api/staff, /api/workshop, /api/inventory, /api/invoices, /api/reminders, /api/reports
-- Built main app layout with shadcn/ui SidebarProvider, responsive sidebar navigation, theme toggle, and sticky header
-- Built 8 module page components via subagents: Dashboard (KPIs, charts, tables), Customers (CRUD, expandable vehicles), Job Cards (CRUD, status management, detail view), Workshop (tech board, kanban, scheduling), Inventory (parts CRUD, low stock alerts), Billing (invoices, line items, payments), Reminders (SMS/WhatsApp/Email), Reports (charts, productivity, financials)
-- Fixed SidebarProvider missing wrapper
-- Fixed LabourEntry relation missing in Prisma schema
-- Verified all 8 pages via agent browser - all rendering correctly with no console errors
-- Dark/light theme confirmed working
+- Read existing codebase: schema.prisma, app-store.ts, staff API, page.tsx, dashboard-page.tsx
+- Updated Zustand store: added 'user-management' ModulePage, ADMIN-only access/create/edit permissions
+- Created Staff CRUD API: POST (create), PUT (update role/info), DELETE (with cascade cleanup) in /api/staff/[id]/route.ts
+- Built comprehensive UserManagementPage component with 3 tabs: Staff List, Role Overview, Permission Matrix
+- Staff List tab: search, role filter, staff table with avatars, role badges, status indicators, action dropdown (view permissions, edit, activate/deactivate, delete)
+- Create/Edit dialogs: name, email, phone, role selector, active toggle, live permission preview
+- Permission view dialog: shows access/create/edit/approve modules for selected role
+- Delete dialog: confirmation with active job warning
+- Updated page.tsx: added UserCog icon, nav item, page renderer for user-management
+- Updated dashboard-page.tsx: added "Manage Users" button for admins, updated permission maps
+- Reduced Prisma query logging for performance
+- Build verified: `next build` passes, TypeScript compilation clean, all routes generated
+- API verified: GET returns staff data, POST creates new staff, PUT updates role, DELETE logic validated via direct Node.js
+- UI verified via agent-browser: login screen, admin dashboard, User Management page with all tabs renders correctly
+- RBAC verified: User Management only visible in Admin sidebar, not for other roles
 
 Stage Summary:
-- Complete operations management system built as SPA on Next.js 16
-- All modules functional with CRUD operations, filtering, search
-- Dashboard with recharts visualizations (bar charts, pie charts)
-- Responsive design with shadcn/ui components
-- Sample data seeded for demonstration
-- All API endpoints returning correct data
+- New files: /src/app/api/staff/[id]/route.ts, /src/components/modules/user-management-page.tsx
+- Modified files: src/store/app-store.ts, src/app/api/staff/route.ts, src/app/page.tsx, src/components/modules/dashboard-page.tsx, src/lib/db.ts, next.config.ts
+- All 6 roles verified: only ADMIN sees "User Management" in sidebar
+- Full CRUD: Create staff with role assignment, Edit role/permissions/info, Delete with cascade cleanup, Activate/Deactivate toggle
+- Permission preview: real-time display of what modules a role can access/create/edit/approve
