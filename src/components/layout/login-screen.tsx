@@ -1,109 +1,185 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { useAppStore, DEMO_USERS, ROLE_LABELS, ROLE_COLORS, ROLE_ICONS, type UserProfile } from '@/store/app-store'
-import { Wrench, ArrowRight } from 'lucide-react'
-
-function getInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-}
-
-function getRoleBadgeClass(role: UserProfile['role']): string {
-  return ROLE_COLORS[role]
-}
+import { useAppStore, DEMO_USERS, ROLE_LABELS, ROLE_ICONS, type UserProfile } from '@/store/app-store'
+import { Shield, ArrowRight, Eye, EyeOff } from 'lucide-react'
 
 export function LoginScreen() {
   const login = useAppStore(s => s.login)
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [password, setPassword] = useState('')
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+  const handleCardClick = (user: UserProfile) => {
+    setSelectedUser(user)
+    setPassword('')
+  }
+
+  const handleSubmit = () => {
+    if (selectedUser) {
+      login(selectedUser)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && selectedUser) {
+      handleSubmit()
+    }
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 p-4">
-      <div className="w-full max-w-3xl space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
-            <Wrench className="h-8 w-8" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">OpsManager</h1>
-            <p className="text-muted-foreground mt-1">Internal Management System</p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Select your profile to sign in
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#1a1410] via-[#2a2118] to-[#1a1410] p-4 relative overflow-hidden">
+      {/* Subtle ambient glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(180,140,80,0.08)_0%,_transparent_70%)]" />
+
+      <div className="relative z-10 w-full max-w-md space-y-8">
+        {/* Branding */}
+        <div className="text-center space-y-2">
+          <h1
+            className="text-4xl font-bold tracking-wide"
+            style={{ fontFamily: '"Liberation Serif", "Noto Serif SC", Georgia, serif', color: '#c9a55a' }}
+          >
+            OpsManager
+          </h1>
+          <p className="text-xs font-semibold tracking-[0.25em] uppercase" style={{ color: '#8a7a5f' }}>
+            Automotive Workshop System
           </p>
+          <div className="mx-auto w-48 h-px mt-3" style={{ backgroundColor: 'rgba(180,140,80,0.3)' }} />
         </div>
 
-        {/* Role Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {DEMO_USERS.map((user) => (
-            <Card
-              key={user.id}
-              className={`relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/50 hover:scale-[1.02] ${
-                hoveredId === user.id ? 'border-primary/50 shadow-lg scale-[1.02]' : ''
-              }`}
-              onMouseEnter={() => setHoveredId(user.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              onClick={() => login(user)}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-11 w-11 ring-2 ring-muted">
-                    <AvatarFallback className="text-sm font-semibold bg-muted">
-                      {getInitials(user.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-sm leading-none truncate">
-                        {user.name}
-                      </h3>
-                      <span className="text-lg" title={ROLE_LABELS[user.role]}>
-                        {ROLE_ICONS[user.role]}
-                      </span>
+        {/* Login Card */}
+        <div className="bg-white rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden">
+          {!selectedUser ? (
+            /* ── Profile Selection ── */
+            <div className="p-6 sm:p-8 space-y-5">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" style={{ color: '#c9a55a' }} />
+                  <h2 className="text-lg font-bold text-gray-800">Select Profile</h2>
+                </div>
+                <p className="text-sm text-gray-500">Choose an account to sign in</p>
+              </div>
+
+              <div className="space-y-2">
+                {DEMO_USERS.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleCardClick(user)}
+                    onMouseEnter={() => setHoveredId(user.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all duration-150 cursor-pointer text-left ${
+                      hoveredId === user.id
+                        ? 'border-[#c9a55a]/50 bg-[#c9a55a]/5 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #d4a843, #8b6914)' }}
+                    >
+                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                     </div>
-                    <Badge variant="secondary" className={`text-xs font-medium ${getRoleBadgeClass(user.role)}`}>
-                      {ROLE_LABELS[user.role]}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
+                      <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                    </div>
+                    <span className="text-base shrink-0">{ROLE_ICONS[user.role]}</span>
+                    {hoveredId === user.id && (
+                      <ArrowRight className="h-4 w-4 shrink-0" style={{ color: '#c9a55a' }} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* ── Password / Confirm Screen ── */
+            <div className="p-6 sm:p-8 space-y-5">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" style={{ color: '#c9a55a' }} />
+                  <h2 className="text-lg font-bold text-gray-800">Sign In</h2>
                 </div>
-                {hoveredId === user.id && (
-                  <div className="absolute bottom-3 right-3">
-                    <ArrowRight className="h-4 w-4 text-primary" />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                <p className="text-sm text-gray-500">
+                  Signing in as <span className="font-medium text-gray-700">{selectedUser.name}</span>
+                </p>
+              </div>
+
+              {/* Selected User Info */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #d4a843, #8b6914)' }}
+                >
+                  {selectedUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{selectedUser.name}</p>
+                  <p className="text-xs" style={{ color: '#8b6914' }}>
+                    {ROLE_ICONS[selectedUser.role]} {ROLE_LABELS[selectedUser.role]}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-1.5">
+                <label htmlFor="login-password" className="text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Enter any password to continue"
+                    className="w-full h-11 px-4 pr-11 text-sm rounded-lg border border-gray-200 bg-white text-gray-800 placeholder:text-gray-400 outline-none transition-colors focus:border-[#c9a55a] focus:ring-1 focus:ring-[#c9a55a]/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">Demo mode — any password works</p>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                onClick={handleSubmit}
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-lg text-white text-sm font-semibold transition-all duration-200 cursor-pointer"
+                style={{
+                  background: 'linear-gradient(135deg, #d4a843, #8b6914)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #c09838, #7a5c10)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(180,140,80,0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #d4a843, #8b6914)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+              >
+                Sign In
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Permission Overview */}
-        <Card className="bg-muted/30">
-          <CardContent className="p-5">
-            <h3 className="text-sm font-semibold mb-3">Access Overview by Role</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-              {([
-                { role: 'ADMIN' as const, label: 'Admin', modules: 'Full access' },
-                { role: 'MANAGER' as const, label: 'Manager', modules: 'All except Inventory' },
-                { role: 'SERVICE_ADVISOR' as const, label: 'Advisor', modules: 'Customers, Jobs, Billing' },
-                { role: 'CASHIER' as const, label: 'Cashier', modules: 'Customers, Billing' },
-                { role: 'STOREKEEPER' as const, label: 'Storekeeper', modules: 'Inventory, Workshop' },
-                { role: 'TECHNICIAN' as const, label: 'Technician', modules: 'Workshop, Jobs (view)' },
-              ]).map((item) => (
-                <div key={item.role} className="space-y-1">
-                  <Badge variant="outline" className={`text-xs font-medium w-full justify-center ${getRoleBadgeClass(item.role)}`}>
-                    {ROLE_ICONS[item.role]} {item.label}
-                  </Badge>
-                  <p className="text-muted-foreground text-center">{item.modules}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Footer */}
+        <p className="text-center text-xs" style={{ color: '#5a4f3f' }}>
+          OpsManager — Secure Workshop Management System
+        </p>
       </div>
     </div>
   )
