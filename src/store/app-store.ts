@@ -71,11 +71,6 @@ const MODULE_APPROVE: Record<UserRole, ModulePage[]> = {
 // Predefined demo users for each role
 export const DEMO_USERS: UserProfile[] = [
   { id: '1', name: 'John Admin', email: 'john@ops.com', phone: '555-0100', role: 'ADMIN' },
-  { id: '2', name: 'Sarah Manager', email: 'sarah@ops.com', phone: '555-0101', role: 'MANAGER' },
-  { id: '3', name: 'Mike Advisor', email: 'mike@ops.com', phone: '555-0102', role: 'SERVICE_ADVISOR' },
-  { id: '4', name: 'Lisa Cashier', email: 'lisa@ops.com', phone: '555-0103', role: 'CASHIER' },
-  { id: '5', name: 'Tom Store', email: 'tom@ops.com', phone: '555-0104', role: 'STOREKEEPER' },
-  { id: '6', name: 'Dave Tech', email: 'dave@ops.com', phone: '555-0105', role: 'TECHNICIAN' },
 ]
 
 export const ROLE_LABELS: Record<UserRole, string> = {
